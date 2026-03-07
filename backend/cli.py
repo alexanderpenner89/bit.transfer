@@ -1,9 +1,10 @@
 """CLI für den Gewerk-Research Agent.
 
 Usage:
-    python cli.py [--output FILE] [--verbose] [--show-queries] <profile.json>
+    python cli.py [--output FILE] [--verbose] [--show-queries] [--trace] <profile.json>
 """
 import asyncio
+import uuid
 
 import typer
 from rich.console import Console
@@ -11,7 +12,19 @@ from rich.panel import Panel
 from rich.table import Table
 
 from agents import OrchestratorAgent, ProfileParsingAgent
+from config import settings
 from schemas.search_strategy import SearchStrategyModel
+
+# Initialize Langfuse if enabled
+if settings.langfuse_enabled and settings.langfuse_public_key and settings.langfuse_secret_key:
+    from langfuse import Langfuse
+    langfuse = Langfuse(
+        public_key=settings.langfuse_public_key,
+        secret_key=settings.langfuse_secret_key,
+        host=settings.langfuse_base_url,
+    )
+else:
+    langfuse = None
 
 app = typer.Typer(help="Gewerk-Research CLI - Generiert Forschungsstrategien für Handwerksgewerke")
 console = Console()
@@ -70,8 +83,15 @@ def generate(
     output: str | None = typer.Option(None, "--output", "-o", help="Ausgabedatei (optional)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Detaillierte Fehlermeldungen"),
     show_queries: bool = typer.Option(False, "--show-queries", "-q", help="Zeige alle Queries (nicht nur die ersten 5)"),
+    trace: bool = typer.Option(False, "--trace", "-t", help="Aktiviere Langfuse Tracing für diesen Aufruf"),
 ) -> None:
     """Generiert eine Forschungsstrategie aus einem Gewerks-Profil."""
+    trace_id = None
+    if trace and langfuse:
+        trace_id = str(uuid.uuid4())
+        langfuse.trace(id=trace_id, name="cli.generate")
+        console.print(f"[dim]Trace ID: {trace_id}[/dim]")
+
     try:
         # Profil laden
         console.print(f"[dim]Lade Profil aus:[/dim] {profile_path}")

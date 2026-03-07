@@ -7,6 +7,7 @@ Dependencies:
 - Set PROVIDER and corresponding API key in backend/.env (see .env.example)
 - For tests: pass model="test" or mock agent.run — no API call needed
 """
+from langfuse import observe
 from pydantic_ai import Agent, RunContext
 
 from agents.keyword_extractor import KeywordExtractor
@@ -39,6 +40,8 @@ class OrchestratorAgent:
         )
         self._register_system_prompts()
 
+    @observe(name="orchestrator.generate", as_type="agent")
+    @observe(name="orchestrator.generate", as_type="agent")
     async def generate(self, profil: GewerksProfilModel) -> SearchStrategyModel:
         """Generates a complete search strategy for the given profile."""
         user_prompt = self._build_user_prompt(profil)
