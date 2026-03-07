@@ -30,7 +30,8 @@ class GewerksProfilModel(BaseModel):
     )
 
     kernkompetenzen: list[str] = Field(
-        default_factory=list,
+        ...,
+        min_length=1,
         description="Liste der Kernkompetenzen des Gewerks",
         examples=[["Mauerwerksbau", "Betonbau", "Fassadenbau"]],
     )
@@ -45,37 +46,43 @@ class GewerksProfilModel(BaseModel):
     )
 
     techniken_manuell: list[str] = Field(
-        default_factory=list,
+        ...,
+        min_length=1,
         description="Manuelle Handwerkstechniken",
         examples=[["Stemmen", "Verzapfen", "Glattschlagen"]],
     )
 
     techniken_maschinell: list[str] = Field(
-        default_factory=list,
+        ...,
+        min_length=1,
         description="Maschinelle Bearbeitungstechniken",
         examples=[["CNC-Bearbeitung", "Bohren", "Sägen"]],
     )
 
     techniken_oberflaeche: list[str] = Field(
-        default_factory=list,
+        ...,
+        min_length=1,
         description="Oberflächenbehandlungstechniken",
         examples=[["Lasieren", "Beizen", "Lackieren"]],
     )
 
     werkstoffe: list[str] = Field(
-        default_factory=list,
+        ...,
+        min_length=1,
         description="Verarbeitete Materialien und Werkstoffe",
         examples=[["Massivholz", "Beton", "Naturstein"]],
     )
 
     software_tools: list[str] = Field(
-        default_factory=list,
+        ...,
+        min_length=1,
         description="Verwendete digitale Werkzeuge und Software",
         examples=[["AutoCAD", "BIM", "TimberStruct"]],
     )
 
     arbeitsbedingungen: list[str] = Field(
-        default_factory=list,
+        ...,
+        min_length=1,
         description="Physische und ergonomische Arbeitsbedingungen",
         examples=[["Schwere körperliche Arbeit", "Freiluftarbeit", "Höhenarbeit"]],
     )
