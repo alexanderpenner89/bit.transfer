@@ -5,7 +5,7 @@ Uses unittest.mock to mock agent.run — same pattern as test_orchestrator.py.
 """
 import asyncio
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -40,19 +40,24 @@ def _make_mock_result(strategy: SearchStrategyModel) -> MagicMock:
     return mock
 
 
-class TestE2Pipeline:
-    def test_full_pipeline_maurer(self):
-        """E1 → E2: Profile Parser → Orchestrator → SearchStrategyModel."""
-        parser = ProfileParsingAgent()
-        orchestrator = OrchestratorAgent()
+@pytest.fixture
+def parser() -> ProfileParsingAgent:
+    return ProfileParsingAgent()
 
+
+@pytest.fixture
+def orchestrator() -> OrchestratorAgent:
+    return OrchestratorAgent()
+
+
+class TestE2Pipeline:
+    def test_full_pipeline_maurer(self, parser, orchestrator):
+        """E1 → E2: Profile Parser → Orchestrator → SearchStrategyModel."""
         profil = parser.parse_file(PROFILES_DIR / "maurer.json")
         strategy = _make_strategy_for_gewerk(profil.gewerk_id)
         mock_result = _make_mock_result(strategy)
 
-        with __import__("unittest.mock", fromlist=["patch"]).patch.object(
-            orchestrator.agent, "run", new=AsyncMock(return_value=mock_result)
-        ):
+        with patch.object(orchestrator.agent, "run", new=AsyncMock(return_value=mock_result)):
             result = asyncio.run(orchestrator.generate(profil))
 
         assert isinstance(result, SearchStrategyModel)
@@ -61,11 +66,8 @@ class TestE2Pipeline:
         # KeywordExtractor queries merged in → should have > 2 DE queries
         assert len(result.keyword_queries_de) >= 5
 
-    def test_full_pipeline_all_three_profiles(self):
+    def test_full_pipeline_all_three_profiles(self, parser, orchestrator):
         """All three pilot profiles run through the full E2 pipeline."""
-        parser = ProfileParsingAgent()
-        orchestrator = OrchestratorAgent()
-
         profiles = [
             ("maurer.json", "A_01_MAURER"),
             ("tischler.json", "A_13_TISCHLER"),
@@ -77,9 +79,7 @@ class TestE2Pipeline:
             strategy = _make_strategy_for_gewerk(profil.gewerk_id)
             mock_result = _make_mock_result(strategy)
 
-            with __import__("unittest.mock", fromlist=["patch"]).patch.object(
-                orchestrator.agent, "run", new=AsyncMock(return_value=mock_result)
-            ):
+            with patch.object(orchestrator.agent, "run", new=AsyncMock(return_value=mock_result)):
                 result = asyncio.run(orchestrator.generate(profil))
 
             assert isinstance(result, SearchStrategyModel)
