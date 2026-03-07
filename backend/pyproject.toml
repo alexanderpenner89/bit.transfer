@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Backend mit Pydantic-Schemas für Gewerks-Profile"
 requires-python = ">=3.11"
 dependencies = [
+    "anthropic>=0.84.0",
     "pydantic>=2.0.0",
+    "pydantic-ai>=0.0.36",
 ]
 
 [project.optional-dependencies]
