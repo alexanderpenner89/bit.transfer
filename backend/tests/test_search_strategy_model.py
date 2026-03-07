@@ -30,18 +30,29 @@ class TestForschungsFrageModel:
                 prioritaet=1,
             )
 
+    def test_prioritaet_above_max_raises(self):
+        with pytest.raises(ValidationError):
+            ForschungsFrage(
+                frage="Test",
+                bezug_profilfelder=["kernkompetenzen"],
+                prioritaet=4,
+            )
+
+    def test_prioritaet_valid_boundaries(self):
+        # Both extremes must be valid
+        ForschungsFrage(frage="Test", bezug_profilfelder=["x"], prioritaet=1)
+        ForschungsFrage(frage="Test", bezug_profilfelder=["x"], prioritaet=3)
+
 
 class TestSearchStrategyModel:
     def test_valid_model_creates_correctly(self):
         strategy = SearchStrategyModel(
             gewerk_id="A_01_MAURER",
             forschungsfragen=[
-                ForschungsFrage(
-                    frage="Welche Materialien optimieren Mauerwerk?",
-                    bezug_profilfelder=["werkstoffe"],
-                    prioritaet=1,
-                )
-            ] * 3,
+                ForschungsFrage(frage="Welche Materialien optimieren Mauerwerk?", bezug_profilfelder=["werkstoffe"], prioritaet=1),
+                ForschungsFrage(frage="Welche Techniken reduzieren Rückenbelastung?", bezug_profilfelder=["arbeitsbedingungen"], prioritaet=2),
+                ForschungsFrage(frage="Wie wirken sich neue Baustoffe auf Haftung aus?", bezug_profilfelder=["werkstoffe", "techniken_manuell"], prioritaet=3),
+            ],
             keyword_queries_de=["Mauerwerk AND Ziegel", "Beton AND Bewehrung"],
             keyword_queries_en=["masonry AND brick", "concrete AND reinforcement"],
             semantic_queries_en=["load-bearing masonry construction techniques"],
@@ -97,4 +108,35 @@ class TestSearchStrategyModel:
                 semantic_queries_en=["c"],
                 hyde_abstracts=[],
                 concept_filter_ids=None,
+            )
+
+    def test_forschungsfragen_max_10_enforced(self):
+        with pytest.raises(ValidationError):
+            SearchStrategyModel(
+                gewerk_id="TEST",
+                forschungsfragen=[
+                    ForschungsFrage(frage=f"F{i}", bezug_profilfelder=["x"], prioritaet=1)
+                    for i in range(11)
+                ],
+                keyword_queries_de=["a"],
+                keyword_queries_en=["b"],
+                semantic_queries_en=["c"],
+                hyde_abstracts=[],
+                concept_filter_ids=None,
+            )
+
+    def test_max_results_upper_bound_enforced(self):
+        with pytest.raises(ValidationError):
+            SearchStrategyModel(
+                gewerk_id="TEST",
+                forschungsfragen=[
+                    ForschungsFrage(frage=f"F{i}", bezug_profilfelder=["x"], prioritaet=1)
+                    for i in range(3)
+                ],
+                keyword_queries_de=["a"],
+                keyword_queries_en=["b"],
+                semantic_queries_en=["c"],
+                hyde_abstracts=[],
+                concept_filter_ids=None,
+                max_results_per_query=201,
             )
