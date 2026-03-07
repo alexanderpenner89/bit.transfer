@@ -1,0 +1,79 @@
+{
+  "gewerk_id": "A_01_ELEKTROTECHNIKER",
+  "gewerk_name": "Elektrotechniker",
+  "hwo_anlage": "A",
+  "kernkompetenzen": [
+    "Planung, Installation und Inbetriebnahme elektrischer Anlagen",
+    "Fehlerdiagnose und Störungsbeseitigung in elektrischen Systemen",
+    "Prüfung und Messung elektrischer Betriebsmittel nach VDE-Normen",
+    "Lesen und Erstellen von Schalt- und Stromlaufplänen",
+    "Montage von Energie- und Gebäudetechniksystemen",
+    "Wartung und Instandhaltung elektrischer Anlagen"
+  ],
+  "taetigkeitsfelder": {
+    "Energietechnik": [
+      "Installation von Stark- und Schwachstromanlagen",
+      "Montage von Verteileranlagen und Schaltschränken",
+      "Verlegung von Kabeln und Leitungen"
+    ],
+    "Gebäudetechnik": [
+      "Installation von Beleuchtungsanlagen",
+      "Montage von Hausinstallationen (Steckdosen, Schalter, Sicherungsanlagen)",
+      "Einbau von Smart-Home-Systemen"
+    ],
+    "Antriebstechnik": [
+      "Montage und Anschluss von Elektromotoren",
+      "Installation von Frequenzumrichtern",
+      "Inbetriebnahme elektrischer Antriebe"
+    ],
+    "Messtechnik und Prüfung": [
+      "Durchführung von DGUV-V3-Prüfungen",
+      "Messung von Isolationswiderständen",
+      "Überprüfung von Schutzmaßnahmen"
+    ]
+  },
+  "techniken_manuell": [
+    "Kabelconfection (Crimpen, Abisolieren, Verlöten)",
+    "Verlegen und Befestigen von Leitungen",
+    "Montage von Komponenten auf Hutschienen",
+    "Verdrahten von Schaltschränken",
+    "Anschlusstechnik für Klemmen und Steckverbinder"
+  ],
+  "techniken_maschinell": [
+    "Bohren und Stemmen mit Bohrhammer",
+    "Einsatz von Kabelzugmaschinen",
+    "Verwendung von Leitungsverlegemaschinen",
+    "Einsatz von Schraubautomaten",
+    "Thermografie-Kamera zur Fehlerdiagnose"
+  ],
+  "techniken_oberflaeche": [
+    "Abdichten von Kabeldurchführungen",
+    "Brandschutzabschottung an Kabel- und Leitungsdurchführungen",
+    "Beschriftung und Kennzeichnung von Betriebsmitteln"
+  ],
+  "werkstoffe": [
+    "Kupferkabel und -leitungen",
+    "NYM-Installationskabel",
+    "Datenkabel (CAT6, CAT7)",
+    "Kabelkanäle und Schutzrohre (PVC, Metall)",
+    "Schaltschrankmaterial (Hutschienen, Kabelhalter)",
+    "Lichtwellenleiter (LWL)",
+    "Klemmleisten und Kabelschuhe"
+  ],
+  "software_tools": [
+    "EPLAN Electric P8 (Schaltplanerstellung)",
+    "AutoCAD Electrical",
+    "FLUKE Connect (Messdatenverwaltung)",
+    "SAP PM (Instandhaltungsplanung)",
+    "Trimble Accubid (Kalkulation)"
+  ],
+  "arbeitsbedingungen": [
+    "Arbeit auf Baustellen und in Gebäuden",
+    "Häufige Arbeit in engen und beengten Verhältnissen",
+    "Arbeit auf Leitern und Gerüsten",
+    "Umgang mit gefährlichen Spannungen (Arbeitsschutzvorschriften)",
+    "Wechselnde Einsatzorte",
+    "Teamarbeit sowie selbstständige Tätigkeit",
+    "Bereitschaftsdienst und Notfalleinsätze möglich"
+  ]
+}

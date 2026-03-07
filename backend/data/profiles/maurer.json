@@ -1,0 +1,81 @@
+{
+  "gewerk_id": "A_03_MAURER",
+  "gewerk_name": "Maurer",
+  "hwo_anlage": "A",
+  "kernkompetenzen": [
+    "Mauern von Wänden, Pfeilern und Fundamenten aus verschiedenen Baustoffen",
+    "Herstellen von Beton- und Stahlbetonkonstruktionen",
+    "Verlegen von Putz, Estrich und Estrichen",
+    "Errichten von Gerüsten und Schalungen",
+    "Lesen und Umsetzen von Bauplänen und Leistungsverzeichnissen",
+    "Ausführung von Abdichtungs- und Wärmedämmarbeiten"
+  ],
+  "taetigkeitsfelder": {
+    "Rohbau": [
+      "Mauern von Außen- und Innenwänden",
+      "Herstellen von Decken und Böden",
+      "Errichten von Fundamenten und Kellern"
+    ],
+    "Betonbau": [
+      "Aufbau von Schalungen für Betonkonstruktionen",
+      "Verlegen von Bewehrungsstahl",
+      "Betonieren und Verdichten von Bauteilen"
+    ],
+    "Sanierung und Instandhaltung": [
+      "Ausbesserung von Mauerwerk und Putz",
+      "Trockenlegung von Kellern und Mauerwerk",
+      "Reparatur von Rissen und Schäden"
+    ],
+    "Dämmung und Fassade": [
+      "Anbringen von Wärmedämmverbundsystemen (WDVS)",
+      "Herstellen von Außen- und Innenputz",
+      "Montage von Fassadenverkleidungen"
+    ]
+  },
+  "techniken_manuell": [
+    "Mauern mit Kelle, Richtscheit und Wasserwaage",
+    "Handmischen und Anmachen von Mörtel",
+    "Stemmen und Schlitzen von Mauerwerk",
+    "Verlegen von Natursteinen und Formsteinen",
+    "Schneiden von Mauersteinen mit Hammer und Meißel"
+  ],
+  "techniken_maschinell": [
+    "Betonmischer und Zwangsmischer für Mörtel und Beton",
+    "Bohrhammer und Abbruchhammer",
+    "Wandsäge und Trennschleifer",
+    "Rüttelplatte und Innenrüttler für Beton",
+    "Mörtelspritzmaschine (Putzmaschine)"
+  ],
+  "techniken_oberflaeche": [
+    "Verputzen (Kalkputz, Gipsputz, Zementputz)",
+    "Glätten und Abziehen von Putzflächen",
+    "Auftragen von Sperr- und Grundierungsanstrichen",
+    "Abdichten mit bituminösen Beschichtungen",
+    "Aufbringen von Wärmedämmputz"
+  ],
+  "werkstoffe": [
+    "Mauerziegel (Vollziegel, Hochlochziegel, Poroton)",
+    "Kalksandsteine",
+    "Porenbeton (Ytong, Hebel)",
+    "Beton und Stahlbeton (verschiedene Festigkeitsklassen)",
+    "Mauermörtel (Dünnbettmörtel, Normalmörtel)",
+    "Dämmmaterialien (Mineralwolle, EPS, XPS)",
+    "Bewehrungsstahl"
+  ],
+  "software_tools": [
+    "AutoCAD (Lesen von Bauplänen)",
+    "ARRIBA-Kalkulation (Bauprojektkalkulation)",
+    "MS Project (Bauablaufplanung)",
+    "iTwo (AVA-Software für Ausschreibung und Abrechnung)",
+    "Theodolith-Software / Tachymeter-Auswertung"
+  ],
+  "arbeitsbedingungen": [
+    "Outdoor-Tätigkeit auf Baustellen, wetterabhängig",
+    "Körperlich schwere Arbeit (Heben und Tragen von Lasten)",
+    "Arbeit auf Gerüsten und in der Höhe",
+    "Staub- und Lärmbelastung",
+    "Wechselnde Baustellen und Einsatzorte",
+    "Teamarbeit in Kolonnen",
+    "Saisonale Einschränkungen bei Frost und extremer Hitze"
+  ]
+}

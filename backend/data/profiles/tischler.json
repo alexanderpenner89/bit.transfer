@@ -1,0 +1,81 @@
+{
+  "gewerk_id": "A_02_TISCHLER",
+  "gewerk_name": "Tischler",
+  "hwo_anlage": "A",
+  "kernkompetenzen": [
+    "Planung, Anfertigung und Montage von Möbeln und Inneneinrichtungen",
+    "Holzbe- und -verarbeitung mit Hand- und Maschinenwerkzeug",
+    "Oberflächenbehandlung von Holz und Holzwerkstoffen",
+    "Konstruktion und Fertigung von Fenstern, Türen und Treppen",
+    "Lesen und Anfertigen von Werkzeichnungen und Maßskizzen",
+    "Restaurierung und Reparatur von Holzmöbeln"
+  ],
+  "taetigkeitsfelder": {
+    "Möbelbau": [
+      "Fertigung von Einbauküchen und Einbaumöbeln",
+      "Herstellung von Schränken, Regalen und Sitzmöbeln",
+      "Anfertigung von Maßmöbeln nach Kundenwunsch"
+    ],
+    "Innenausbau": [
+      "Verlegung von Parkett und Laminat",
+      "Einbau von Deckenverkleidungen und Wandpaneelen",
+      "Montage von Trennwänden"
+    ],
+    "Fenster und Türen": [
+      "Herstellung und Einbau von Holzfenstern",
+      "Montage und Reparatur von Innentüren",
+      "Einbau von Haustüren und Toren"
+    ],
+    "Restaurierung": [
+      "Reparatur und Aufarbeitung von Antiquitäten",
+      "Ausbesserung von Holzschäden",
+      "Furnierarbeiten und Rekonstruktion"
+    ]
+  },
+  "techniken_manuell": [
+    "Sägen mit Handsäge und Stichsäge",
+    "Hobeln und Schleifen von Holzoberflächen",
+    "Stemmen und Meißeln für Verbindungen",
+    "Verleimen und Verpressen von Holzteilen",
+    "Dübeln, Zinken und Schlitz-Zapfen-Verbindungen"
+  ],
+  "techniken_maschinell": [
+    "Formatkreissäge zum Zuschnitt von Platten",
+    "Tischfräse und Oberfräse für Profilarbeiten",
+    "Abrichthobelmaschine und Dickenhobel",
+    "CNC-Bearbeitungszentren für Serienfertigung",
+    "Kantenanleimmaschine für Plattenwerkstoffe"
+  ],
+  "techniken_oberflaeche": [
+    "Lackieren mit Pinsel, Rolle und Spritzpistole",
+    "Beizen und Lasieren von Holzoberflächen",
+    "Furnieren und Belegen mit Dekormaterialien",
+    "Ölen und Wachsen von Massivholz",
+    "Schleifen und Polieren für Hochglanzoberflächen"
+  ],
+  "werkstoffe": [
+    "Massivholz (Eiche, Buche, Kiefer, Fichte)",
+    "Sperrholz und Multiplex",
+    "MDF und HDF",
+    "Spanplatten (mit und ohne Beschichtung)",
+    "Furnier und Echtholzdekore",
+    "Holzleim (D3, D4) und Montagekleber",
+    "Beschläge (Scharniere, Schubladenführungen, Griffe)"
+  ],
+  "software_tools": [
+    "CAD-Programm (z.B. Cabinet Vision, imos)",
+    "CNC-Programmierung (z.B. Homag WoodWOP)",
+    "ERP-Software (z.B. Holz-Warenwirtschaft)",
+    "SketchUp für 3D-Visualisierungen",
+    "Microsoft Office für Angebote und Dokumentation"
+  ],
+  "arbeitsbedingungen": [
+    "Arbeit in Werkstatt und auf Baustellen (Montage)",
+    "Stehende Tätigkeit, körperlich anspruchsvoll",
+    "Lärm- und Staubbelastung (Gehörschutz, Staubmaske erforderlich)",
+    "Arbeit mit scharfen Werkzeugen und Maschinen",
+    "Kreative und handwerklich präzise Arbeit",
+    "Kundenkontakt bei Aufmaß und Abnahme",
+    "Saisonale Schwankungen durch Baugewerbe"
+  ]
+}
