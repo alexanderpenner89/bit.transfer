@@ -4,8 +4,8 @@ Generates research questions and bilingual search strategies via Chain-of-Though
 Uses pydantic-ai for type-safe LLM outputs.
 
 Dependencies:
-- ANTHROPIC_API_KEY env var (for real calls)
-- For tests: mock agent.run (no API call)
+- Set PROVIDER and corresponding API key in backend/.env (see .env.example)
+- For tests: pass model="test" or mock agent.run — no API call needed
 """
 from pydantic_ai import Agent, RunContext
 
