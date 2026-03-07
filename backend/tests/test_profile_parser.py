@@ -54,6 +54,10 @@ class TestParseString:
         with pytest.raises(ValidationError):
             agent.parse_string("{not valid json}")
 
+    def test_empty_string_raises_validation_error(self, agent):
+        with pytest.raises(ValidationError):
+            agent.parse_string("")
+
 
 class TestParseFile:
     def test_loads_maurer_profile(self, agent):
