@@ -26,7 +26,10 @@ class OrchestratorAgent:
     E2-S2 + E2-S3: LLM-based, uses pydantic-ai Agent.
     """
 
-    def __init__(self, model: str = "anthropic:claude-3-5-sonnet-20241022") -> None:
+    def __init__(self, model=None) -> None:
+        if model is None:
+            from config import settings
+            model = settings.build_model()
         self._keyword_extractor = KeywordExtractor()
         self.agent: Agent[GewerksProfilModel, SearchStrategyModel] = Agent(
             model=model,
