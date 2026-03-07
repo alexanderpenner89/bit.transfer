@@ -66,11 +66,11 @@ class TestDefaults:
         assert s.gemini_model == "gemini-2.5-pro"
 
     def test_ollama_default_model(self):
-        s = Settings(provider="ollama")
+        s = Settings(provider="ollama", _env_file=None)
         assert s.ollama_model == "llama3.2"
 
     def test_ollama_default_base_url(self):
-        s = Settings(provider="ollama")
+        s = Settings(provider="ollama", _env_file=None)
         assert s.ollama_base_url == "http://localhost:11434/v1"
 
     def test_openrouter_default_model(self):
