@@ -50,6 +50,12 @@ class Settings(BaseSettings):
     openrouter_model: str = "anthropic/claude-3.5-sonnet"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
+    # Langfuse Tracing
+    langfuse_secret_key: str | None = None
+    langfuse_public_key: str | None = None
+    langfuse_base_url: str = "https://cloud.langfuse.com"
+    langfuse_enabled: bool = True
+
     @model_validator(mode="after")
     def validate_provider_keys(self) -> "Settings":
         required = {
