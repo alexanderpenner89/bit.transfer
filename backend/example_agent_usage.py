@@ -115,6 +115,12 @@ if __name__ == "__main__":
         "gewerk_name": "Zimmerer",
         "hwo_anlage": "A",
         "kernkompetenzen": ["Holzbau", "Dachbau"],
+        "techniken_manuell": ["Sägen", "Hobeln", "Stemmen"],
+        "techniken_maschinell": ["Kreissäge", "Oberfräse"],
+        "techniken_oberflaeche": ["Lasieren", "Ölen"],
+        "werkstoffe": ["Vollholz", "Brettschichtholz", "OSB"],
+        "software_tools": ["TimberStruct", "AutoCAD"],
+        "arbeitsbedingungen": ["Freiluftarbeit", "Höhenarbeit"],
     }
 
     validiertes_profil = agent_validate_input(rohdaten)

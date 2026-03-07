@@ -4,8 +4,8 @@ Generates research questions and bilingual search strategies via Chain-of-Though
 Uses pydantic-ai for type-safe LLM outputs.
 
 Dependencies:
-- ANTHROPIC_API_KEY env var (for real calls)
-- For tests: mock agent.run (no API call)
+- Set PROVIDER and corresponding API key in backend/.env (see .env.example)
+- For tests: pass model="test" or mock agent.run — no API call needed
 """
 from pydantic_ai import Agent, RunContext
 
@@ -26,7 +26,10 @@ class OrchestratorAgent:
     E2-S2 + E2-S3: LLM-based, uses pydantic-ai Agent.
     """
 
-    def __init__(self, model: str = "anthropic:claude-3-5-sonnet-20241022") -> None:
+    def __init__(self, model=None) -> None:
+        if model is None:
+            from config import settings
+            model = settings.build_model()
         self._keyword_extractor = KeywordExtractor()
         self.agent: Agent[GewerksProfilModel, SearchStrategyModel] = Agent(
             model=model,
