@@ -1,7 +1,7 @@
 """CLI für den Gewerk-Research Agent.
 
 Usage:
-    python cli.py [--output FILE] [--verbose] <profile.json>
+    python cli.py [--output FILE] [--verbose] [--show-queries] <profile.json>
 """
 import asyncio
 
@@ -26,7 +26,19 @@ def _handle_error(error: Exception, verbose: bool) -> None:
     raise typer.Exit(code=1)
 
 
-def _display_strategy(strategy: SearchStrategyModel) -> None:
+def _display_queries(queries: list[str], title: str, show_all: bool = False) -> None:
+    """Zeigt Queries an, optional alle oder gekürzt."""
+    console.print(f"\n[bold]{title}:[/bold] {len(queries)}")
+
+    display_count = len(queries) if show_all else min(5, len(queries))
+    for i, q in enumerate(queries[:display_count], 1):
+        console.print(f"  {i}. {q}")
+
+    if not show_all and len(queries) > display_count:
+        console.print(f"  ... und {len(queries) - display_count} weitere (verwende --show-queries für alle)")
+
+
+def _display_strategy(strategy: SearchStrategyModel, show_queries: bool = False) -> None:
     """Zeigt die generierte Strategie schön formatiert an."""
     # Forschungsfragen
     questions_table = Table(title="Forschungsfragen", show_header=True)
@@ -41,13 +53,9 @@ def _display_strategy(strategy: SearchStrategyModel) -> None:
     console.print(questions_table)
 
     # Keyword Queries
-    console.print(f"\n[bold]Deutsche Queries:[/bold] {len(strategy.keyword_queries_de)}")
-    for q in strategy.keyword_queries_de[:3]:
-        console.print(f"  • {q}")
-    if len(strategy.keyword_queries_de) > 3:
-        console.print(f"  ... und {len(strategy.keyword_queries_de) - 3} weitere")
-
-    console.print(f"\n[bold]Englische Queries:[/bold] {len(strategy.keyword_queries_en)}")
+    _display_queries(strategy.keyword_queries_de, "Deutsche Queries", show_queries)
+    _display_queries(strategy.keyword_queries_en, "Englische Queries", show_queries)
+    _display_queries(strategy.semantic_queries_en, "Semantic Queries (EN)", show_queries)
 
 
 async def _generate_strategy(profil) -> SearchStrategyModel:
@@ -61,6 +69,7 @@ def generate(
     profile_path: str = typer.Argument(..., help="Pfad zur Profil-JSON-Datei"),
     output: str | None = typer.Option(None, "--output", "-o", help="Ausgabedatei (optional)"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Detaillierte Fehlermeldungen"),
+    show_queries: bool = typer.Option(False, "--show-queries", "-q", help="Zeige alle Queries (nicht nur die ersten 5)"),
 ) -> None:
     """Generiert eine Forschungsstrategie aus einem Gewerks-Profil."""
     try:
@@ -83,7 +92,7 @@ def generate(
 
         # Anzeigen
         console.print("\n[bold green]✓ Strategie generiert![/bold green]\n")
-        _display_strategy(strategy)
+        _display_strategy(strategy, show_queries)
 
         # Optional: Speichern
         if output:
