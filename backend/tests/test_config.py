@@ -1,7 +1,7 @@
 """Tests for Settings — construct directly with kwargs, no .env file needed."""
 import pytest
 from pydantic import ValidationError
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
 
 from config import Settings
 
@@ -104,7 +104,7 @@ class TestBuildModel:
     def test_ollama_local_returns_openai_model(self):
         s = Settings(provider="ollama")
         model = s.build_model()
-        assert isinstance(model, OpenAIModel)
+        assert isinstance(model, OpenAIChatModel)
 
     def test_ollama_cloud_uses_cloud_url(self):
         s = Settings(
@@ -113,9 +113,9 @@ class TestBuildModel:
             ollama_api_key="cloud-key",
         )
         model = s.build_model()
-        assert isinstance(model, OpenAIModel)
+        assert isinstance(model, OpenAIChatModel)
 
     def test_openrouter_returns_openai_model(self):
         s = Settings(provider="openrouter", openrouter_api_key="sk-or-test")
         model = s.build_model()
-        assert isinstance(model, OpenAIModel)
+        assert isinstance(model, OpenAIChatModel)

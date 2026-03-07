@@ -8,7 +8,12 @@ Usage:
 
 For tests: construct Settings(...) directly with kwargs — no .env file needed.
 """
-from typing import Any, Literal
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from pydantic_ai.models.openai import OpenAIChatModel
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -59,8 +64,8 @@ class Settings(BaseSettings):
                 raise ValueError(f"{name} is required when PROVIDER={self.provider}")
         return self
 
-    def build_model(self) -> Any:
-        """Returns pydantic-ai compatible model string or OpenAIModel object."""
+    def build_model(self) -> str | OpenAIChatModel:
+        """Returns pydantic-ai compatible model string or OpenAIChatModel object."""
         match self.provider:
             case "anthropic":
                 return f"anthropic:{self.anthropic_model}"
@@ -69,9 +74,9 @@ class Settings(BaseSettings):
             case "gemini":
                 return f"google-gla:{self.gemini_model}"
             case "ollama":
-                from pydantic_ai.models.openai import OpenAIModel
+                from pydantic_ai.models.openai import OpenAIChatModel
                 from pydantic_ai.providers.openai import OpenAIProvider
-                return OpenAIModel(
+                return OpenAIChatModel(
                     self.ollama_model,
                     provider=OpenAIProvider(
                         base_url=self.ollama_base_url,
@@ -79,14 +84,18 @@ class Settings(BaseSettings):
                     ),
                 )
             case "openrouter":
-                from pydantic_ai.models.openai import OpenAIModel
+                from pydantic_ai.models.openai import OpenAIChatModel
                 from pydantic_ai.providers.openai import OpenAIProvider
-                return OpenAIModel(
+                return OpenAIChatModel(
                     self.openrouter_model,
                     provider=OpenAIProvider(
                         base_url=self.openrouter_base_url,
                         api_key=self.openrouter_api_key,
                     ),
+                )
+            case _:
+                raise NotImplementedError(
+                    f"build_model() not implemented for provider {self.provider!r}"
                 )
 
 
