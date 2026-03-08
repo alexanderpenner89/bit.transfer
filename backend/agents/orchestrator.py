@@ -1,37 +1,40 @@
 """OrchestratorAgent – E2-S2 + E2-S3.
 
-Generates research questions and bilingual search strategies via Chain-of-Thought.
-Uses pydantic-ai for type-safe LLM outputs.
+Generates bilingual OpenAlex search strategies via Chain-of-Thought.
+Uses pydantic-ai for type-safe LLM outputs and pydantic-ai-skills for
+on-demand OpenAlex syntax rules.
 
 Dependencies:
 - Set PROVIDER and corresponding API key in backend/.env (see .env.example)
 - For tests: pass model="test" or mock agent.run — no API call needed
 """
+from pathlib import Path
+
 from langfuse import observe
 from pydantic_ai import Agent, RunContext
+from pydantic_ai_skills import SkillsToolset
 
-from agents.keyword_extractor import KeywordExtractor
 from schemas.gewerksprofil import GewerksProfilModel
 from schemas.search_strategy import SearchStrategyModel
+
+_SKILLS_DIR = Path(__file__).parent / "skills"
 
 
 class OrchestratorAgent:
     """Management-Agent der E2-Pipeline.
 
     Generates from a validated GewerksProfilModel:
-    - 3–10 specific research questions (Chain-of-Thought)
-    - Bilingual keyword queries (DE + EN)
-    - Semantic search queries (EN)
-    - Optional HyDE abstracts
+    - 1–2 semantic English paragraphs for vector search
+    - 2–3 German Boolean queries (OpenAlex syntax)
+    - 2–3 English Boolean queries (OpenAlex syntax)
 
-    E2-S2 + E2-S3: LLM-based, uses pydantic-ai Agent.
+    E2-S2 + E2-S3: LLM-based, uses pydantic-ai Agent with pydantic-ai-skills.
     """
 
     def __init__(self, model=None) -> None:
         if model is None:
             from config import settings
             model = settings.build_model()
-        self._keyword_extractor = KeywordExtractor()
         self.agent: Agent[GewerksProfilModel, SearchStrategyModel] = Agent(
             model=model,
             output_type=SearchStrategyModel,
@@ -44,15 +47,15 @@ class OrchestratorAgent:
     async def generate(self, profil: GewerksProfilModel) -> SearchStrategyModel:
         """Generates a complete search strategy for the given profile."""
         user_prompt = self._build_user_prompt(profil)
-        result = await self.agent.run(user_prompt, deps=profil)
+        skills = SkillsToolset(directories=[str(_SKILLS_DIR)])
+        result = await self.agent.run(user_prompt, deps=profil, toolsets=[skills])
         strategy = result.output
 
-        # Ensure gewerk_id is correct and merge deterministic queries
+        # Ensure gewerk_id matches the input profile
         return SearchStrategyModel(
             **{
                 **strategy.model_dump(),
                 "gewerk_id": profil.gewerk_id,
-                "keyword_queries_de": self._merge_de_queries(profil, strategy.keyword_queries_de),
             }
         )
 
@@ -63,7 +66,7 @@ class OrchestratorAgent:
         werkstoffe = ", ".join(profil.werkstoffe[:6])
         software = ", ".join(profil.software_tools[:4])
 
-        return f"""Analysiere das folgende Handwerksgewerk und generiere eine wissenschaftliche Recherchestrategie.
+        return f"""Analysiere das folgende Handwerksgewerk und generiere eine präzise OpenAlex-Suchstrategie.
 
 **Gewerk:** {profil.gewerk_name} (ID: {profil.gewerk_id}, HWO-Anlage: {profil.hwo_anlage})
 
@@ -76,28 +79,56 @@ class OrchestratorAgent:
 **Software/Digitale Werkzeuge:** {software}
 
 **Aufgabe (Chain-of-Thought):**
-1. Überlege: Welche wissenschaftlichen Forschungsfelder sind für dieses Gewerk relevant?
-2. Leite 3–10 spezifische Forschungsfragen ab, jede mit Bezug zu mindestens einem Profilfeld.
-3. Generiere je 5–10 deutsche Keyword-Queries mit Boolean-Operatoren (AND, OR).
-4. Übersetze und erweitere die Queries ins Englische (mindestens 2 EN-Varianten pro DE-Query).
-5. Formuliere 2–3 englische Absatz-Descriptions für Semantic Search.
 
+Schritt 1 – Semantic Queries (EN):
+  Formuliere 1–2 englische Absätze (50–100 Wörter). Kein Boolean. Akademisches Vokabular.
+
+Schritt 2 – Deutsche Boolean-Queries (2–3 Stück):
+  Für jede Query:
+    a) Wähle ein zentrales Konzept (Werkstoff, Technik oder Anwendungsfeld).
+    b) Baue einen Synonym-Cluster: ("Begriff A" OR "Begriff B" OR Stamm*).
+    c) Verbinde maximal 2 Cluster mit AND.
+    d) Setze gezielt Wildcards (mind. 3 Zeichen vor *) ODER einen Proximity-Operator (~3).
+  Beispiel: ("Mauerwerk" OR "Ziegel" OR Mauer*) AND ("Mörtel Verarbeitung"~3)
+
+Schritt 3 – Englische Boolean-Queries (2–3 Stück):
+  Gleiche Rezeptur wie Schritt 2, auf Englisch.
+  Beispiel: ("masonry" OR "brickwork" OR mason*) AND ("mortar application"~3)
+
+Schritt 4 – Selbstprüfung (PFLICHT, vor dem finalen Output):
+  Prüfe jede boolean Query gegen diese Checkliste:
+  ✓ Operatoren UPPERCASE (AND, OR, NOT)?
+  ✓ Synonyme in runden Klammern gruppiert?
+  ✓ Mindestens ein Wildcard (*) oder Proximity-Operator (~N) enthalten?
+  ✓ Maximal 2–3 AND-verbundene Cluster?
+  Wenn eine Prüfung fehlschlägt → überarbeite die Query jetzt, bevor du antwortest.
+
+Lade den Skill 'openalex-query-generation' für weitere Syntaxregeln.
 Antworte NUR mit dem strukturierten SearchStrategyModel-Output."""
 
     def _register_system_prompts(self) -> None:
         """Registers static and dynamic system prompts."""
 
         @self.agent.system_prompt
-        def static_prompt() -> str:
-            return """Du bist ein wissenschaftlicher Recherche-Spezialist für das deutsche Handwerk.
-Deine Aufgabe: Aus einem Gewerks-Profil der Handwerksordnung (HWO) erstellst du
-präzise Forschungsfragen und bilinguale Suchstrategien für akademische Datenbanken.
+        def openalex_expert_prompt() -> str:
+            return """Du bist ein Principal Data Engineer, spezialisiert auf die OpenAlex API.
+Deine Aufgabe ist es, aus Handwerks-Gewerkebeschreibungen (HWO) hochpräzise Suchstrategien für wissenschaftliche Literatur zu generieren.
 
-Prinzipien:
-- Spezifität vor Allgemeinheit: Lieber enge, präzise Queries als breite
-- Bilingualität: Jede deutsche Query hat mindestens 2 englische Varianten
-- Feldabdeckung: Mindestens 80% der Profilfelder sind in Forschungsfragen abgedeckt
-- Boolean-Syntax: AND für Eingrenzung, OR für Synonyme/Varianten"""
+REGEL 1: Die semantische Suche (Semantic Queries)
+- Generiere 1-2 zusammenhängende, fließende englische Absätze.
+- Nutze akademisches Vokabular (z.B. "thermal bridge mitigation" statt "preventing cold spots").
+- Nutze hier KEINE Boolean-Operatoren. Schreibe natürliche Sätze.
+
+REGEL 2: Die Keyword-Suche (Boolean Queries)
+Du musst die strikte OpenAlex-Syntax befolgen:
+- UPPERCASE: Operatoren müssen zwingend als AND, OR, NOT geschrieben werden.
+- KLAMMERN: Gruppiere Synonyme IMMER mit OR in Klammern, z.B. ("Mauerwerk" OR "Ziegel" OR "Kalksandstein").
+- VERMEIDE LANGE AND-KETTEN: Verbinde maximal zwei bis drei Konzepte mit AND, sonst wird die Treffermenge null.
+- PHRASEN: Nutze doppelte Anführungszeichen für exakte Begriffe, z.B. "Stahlbeton".
+- PROXIMITY (Näherungssuche): Nutze die Tilde (~), um Wörter zu finden, die nahe beieinander stehen, z.B. "Dünnbettmörtel Verarbeitung"~3.
+- WILDCARDS: Nutze das Sternchen (*) für Wortstämme, aber es MÜSSEN mindestens 3 Buchstaben davor stehen, z.B. Mauer*.
+
+Lade bei Beginn den Skill 'openalex-query-generation' für detaillierte Beispiele."""
 
         @self.agent.system_prompt
         async def dynamic_prompt(ctx: RunContext[GewerksProfilModel]) -> str:
@@ -107,14 +138,3 @@ Prinzipien:
                 taetigkeiten.extend([f"{bereich}: {t}" for t in liste[:3]])
             taetigkeiten_str = "; ".join(taetigkeiten[:6])
             return f"\nAktuelles Profil-Kontext:\nGewerk-ID: {profil.gewerk_id}\nTätigkeiten: {taetigkeiten_str}"
-
-    def _merge_de_queries(
-        self, profil: GewerksProfilModel, llm_queries: list[str]
-    ) -> list[str]:
-        """Merges deterministic KeywordExtractor queries with LLM queries."""
-        deterministic = self._keyword_extractor.extract_keyword_queries(profil)
-        all_queries = list(deterministic)
-        for q in llm_queries:
-            if q not in all_queries:
-                all_queries.append(q)
-        return all_queries
