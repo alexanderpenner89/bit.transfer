@@ -51,6 +51,15 @@ class Settings(BaseSettings):
     openrouter_model: str = "anthropic/claude-3.5-sonnet"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
+    # Ghost CMS
+    ghost_admin_api_key: str | None = None
+    ghost_url: str = "http://localhost:2368"
+    ghost_ai_author_id: str | None = None
+
+    @property
+    def ghost_enabled(self) -> bool:
+        return bool(self.ghost_admin_api_key)
+
     # OpenAlex
     openalex_api_key: str | None = None
     openalex_max_results: int = 25
