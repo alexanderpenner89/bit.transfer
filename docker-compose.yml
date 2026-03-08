@@ -1,0 +1,41 @@
+services:
+  ghost:
+    image: ghost:5-alpine
+    ports:
+      - "2368:2368"
+    environment:
+      NODE_ENV: development
+      url: ${GHOST_URL:-http://localhost:2368}
+      database__client: mysql
+      database__connection__host: db
+      database__connection__port: 3306
+      database__connection__user: root
+      database__connection__password: ${MYSQL_ROOT_PASSWORD:-ghostpass}
+      database__connection__database: ghost
+      mail__transport: Direct
+    volumes:
+      - ghost_content:/var/lib/ghost/content
+      - ./ghost/routes.yaml:/var/lib/ghost/content/settings/routes.yaml
+      - ./theme/bit-transfer:/var/lib/ghost/content/themes/bit-transfer
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ghostpass}
+      MYSQL_DATABASE: ghost
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-ghostpass}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  ghost_content:
+  mysql_data:
