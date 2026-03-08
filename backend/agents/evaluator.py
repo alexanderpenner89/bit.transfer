@@ -49,6 +49,7 @@ class TopicEvaluatorAgent:
             input={
                 "topic_id": candidate.topic_id,
                 "topic_name": candidate.display_name,
+                "gewerk": profil.gewerk_name,
             },
         ) as agent:
             deps = EvaluatorDeps(candidate=candidate, profil=profil)
