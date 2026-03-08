@@ -13,6 +13,8 @@ dependencies = [
     "rich>=13.9.0",
     "pydantic-ai-skills>=0.1.0",
     "pyalex>=0.21",
+    "httpx>=0.28.1",
+    "pyjwt>=2.11.0",
 ]
 
 [dependency-groups]
