@@ -159,3 +159,11 @@ class TestSystemPrompt:
         orchestrator = OrchestratorAgent()
         prompt = orchestrator._build_user_prompt(maurer_profil)
         assert maurer_profil.kernkompetenzen[0] in prompt
+
+    def test_user_prompt_contains_recipe_instructions(self, maurer_profil):
+        orchestrator = OrchestratorAgent()
+        prompt = orchestrator._build_user_prompt(maurer_profil)
+        assert "Synonym-Cluster" in prompt or "Cluster" in prompt
+        assert "Wildcard" in prompt or "*" in prompt
+        assert "Proximity" in prompt or "~" in prompt
+        assert "Selbstprüfung" in prompt or "Selbst" in prompt
