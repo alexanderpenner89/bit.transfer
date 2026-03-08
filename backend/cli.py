@@ -8,7 +8,6 @@ import asyncio
 import typer
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 
 from agents import OrchestratorAgent, ProfileParsingAgent
 from config import settings
@@ -52,22 +51,9 @@ def _display_queries(queries: list[str], title: str, show_all: bool = False) -> 
 
 def _display_strategy(strategy: SearchStrategyModel, show_queries: bool = False) -> None:
     """Zeigt die generierte Strategie schön formatiert an."""
-    # Forschungsfragen
-    questions_table = Table(title="Forschungsfragen", show_header=True)
-    questions_table.add_column("#", style="dim", width=3)
-    questions_table.add_column("Frage", style="green")
-    questions_table.add_column("Prio", style="cyan", width=4)
-
-    for i, q in enumerate(strategy.forschungsfragen, 1):
-        star = "★" if q.prioritaet == 1 else ""
-        questions_table.add_row(str(i), q.frage, f"{q.prioritaet}{star}")
-
-    console.print(questions_table)
-
-    # Keyword Queries
-    _display_queries(strategy.keyword_queries_de, "Deutsche Queries", show_queries)
-    _display_queries(strategy.keyword_queries_en, "Englische Queries", show_queries)
     _display_queries(strategy.semantic_queries_en, "Semantic Queries (EN)", show_queries)
+    _display_queries(strategy.boolean_queries_de, "Boolean Queries (DE)", show_queries)
+    _display_queries(strategy.boolean_queries_en, "Boolean Queries (EN)", show_queries)
 
 
 async def _generate_strategy(profil, use_trace: bool = False) -> tuple[SearchStrategyModel, str | None]:

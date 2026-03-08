@@ -1,4 +1,4 @@
 from schemas.gewerksprofil import GewerksProfilModel
-from schemas.search_strategy import ForschungsFrage, SearchStrategyModel
+from schemas.search_strategy import SearchStrategyModel
 
-__all__ = ["GewerksProfilModel", "ForschungsFrage", "SearchStrategyModel"]
+__all__ = ["GewerksProfilModel", "SearchStrategyModel"]
