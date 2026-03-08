@@ -79,11 +79,31 @@ class OrchestratorAgent:
 **Software/Digitale Werkzeuge:** {software}
 
 **Aufgabe (Chain-of-Thought):**
-1. Formuliere 1–2 englische Absatz-Descriptions für Semantic Search (50–100 Wörter, kein Boolean).
-2. Generiere 2–3 breite deutsche Boolean-Queries in OpenAlex-Syntax (UPPERCASE AND/OR, Klammern).
-3. Generiere 2–3 breite englische Boolean-Queries in OpenAlex-Syntax (UPPERCASE AND/OR, Klammern).
 
-Lade den Skill 'openalex-query-generation' für detaillierte Syntaxregeln und Beispiele.
+Schritt 1 – Semantic Queries (EN):
+  Formuliere 1–2 englische Absätze (50–100 Wörter). Kein Boolean. Akademisches Vokabular.
+
+Schritt 2 – Deutsche Boolean-Queries (2–3 Stück):
+  Für jede Query:
+    a) Wähle ein zentrales Konzept (Werkstoff, Technik oder Anwendungsfeld).
+    b) Baue einen Synonym-Cluster: ("Begriff A" OR "Begriff B" OR Stamm*).
+    c) Verbinde maximal 2 Cluster mit AND.
+    d) Setze gezielt Wildcards (mind. 3 Zeichen vor *) ODER einen Proximity-Operator (~3).
+  Beispiel: ("Mauerwerk" OR "Ziegel" OR Mauer*) AND ("Mörtel Verarbeitung"~3)
+
+Schritt 3 – Englische Boolean-Queries (2–3 Stück):
+  Gleiche Rezeptur wie Schritt 2, auf Englisch.
+  Beispiel: ("masonry" OR "brickwork" OR mason*) AND ("mortar application"~3)
+
+Schritt 4 – Selbstprüfung (PFLICHT, vor dem finalen Output):
+  Prüfe jede boolean Query gegen diese Checkliste:
+  ✓ Operatoren UPPERCASE (AND, OR, NOT)?
+  ✓ Synonyme in runden Klammern gruppiert?
+  ✓ Mindestens ein Wildcard (*) oder Proximity-Operator (~N) enthalten?
+  ✓ Maximal 2–3 AND-verbundene Cluster?
+  Wenn eine Prüfung fehlschlägt → überarbeite die Query jetzt, bevor du antwortest.
+
+Lade den Skill 'openalex-query-generation' für weitere Syntaxregeln.
 Antworte NUR mit dem strukturierten SearchStrategyModel-Output."""
 
     def _register_system_prompts(self) -> None:
