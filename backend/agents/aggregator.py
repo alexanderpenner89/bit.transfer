@@ -52,7 +52,7 @@ class ResearchAggregator:
 
         with get_langfuse().start_as_current_observation(
             name="aggregator.run",
-            as_type="span",
+            as_type="agent",
             input={"gewerk_id": strategy.gewerk_id, "gewerk_name": profil.gewerk_name},
         ) as span:
             # Stage 1: Parallel semantic search
@@ -63,18 +63,28 @@ class ResearchAggregator:
             # Stage 2: Parallel topic evaluation
             n = len(exploration.topic_candidates)
             self._log(f"  [dim]→ Topic-Evaluierung: {n} Topics parallel (LLM)...[/dim]")
-            evaluations = await asyncio.gather(
-                *[
-                    self._llm(self._evaluator.evaluate(candidate, profil))
-                    for candidate in exploration.topic_candidates
-                ],
-                return_exceptions=True,
-            )
-            relevant_topics = [
-                ev
-                for ev in evaluations
-                if not isinstance(ev, Exception) and ev.is_relevant
-            ]
+            with get_langfuse().start_as_current_observation(
+                name="evaluator.batch",
+                as_type="span",
+                input={"topic_count": n},
+            ) as eval_span:
+                evaluations = await asyncio.gather(
+                    *[
+                        self._llm(self._evaluator.evaluate(candidate, profil))
+                        for candidate in exploration.topic_candidates
+                    ],
+                    return_exceptions=True,
+                )
+                eval_errors = sum(1 for ev in evaluations if isinstance(ev, Exception))
+                relevant_topics = [
+                    ev
+                    for ev in evaluations
+                    if not isinstance(ev, Exception) and ev.is_relevant
+                ]
+                eval_span.update(
+                    output={"relevant": len(relevant_topics), "errors": eval_errors},
+                    **({"level": "WARNING", "status_message": f"{eval_errors} evaluation(s) failed"} if eval_errors else {"level": "DEFAULT"}),
+                )
             self._log(f"  [green]✓[/green] {len(relevant_topics)}/{n} Topics relevant")
 
             # Stage 3: Parallel precision search per relevant topic
@@ -82,30 +92,41 @@ class ResearchAggregator:
                 strategy.boolean_queries_de + strategy.boolean_queries_en
             )
             self._log(f"  [dim]→ Präzisionssuche: {len(relevant_topics)} Topics × {len(all_boolean_queries)} Queries parallel (OpenAlex)...[/dim]")
-            precision_results = await asyncio.gather(
-                *[
-                    self._llm(self._precision.run(topic, all_boolean_queries))
-                    for topic in relevant_topics
-                ],
-                return_exceptions=True,
-            )
+            with get_langfuse().start_as_current_observation(
+                name="precision_search.batch",
+                as_type="span",
+                input={"topic_count": len(relevant_topics), "query_count": len(all_boolean_queries)},
+            ) as ps_span:
+                precision_results = await asyncio.gather(
+                    *[
+                        self._llm(self._precision.run(topic, all_boolean_queries))
+                        for topic in relevant_topics
+                    ],
+                    return_exceptions=True,
+                )
+                precision_errors = sum(1 for r in precision_results if isinstance(r, Exception))
 
-            seen: set[str] = set()
-            precision_works: list[WorkResult] = []
-            for result in precision_results:
-                if isinstance(result, Exception):
-                    continue
-                for work in result:
-                    if work.work_id not in seen:
-                        seen.add(work.work_id)
-                        precision_works.append(work)
+                seen: set[str] = set()
+                precision_works: list[WorkResult] = []
+                for result in precision_results:
+                    if isinstance(result, Exception):
+                        continue
+                    for work in result:
+                        if work.work_id not in seen:
+                            seen.add(work.work_id)
+                            precision_works.append(work)
 
-            precision_works.sort(key=lambda w: w.citation_count, reverse=True)
+                precision_works.sort(key=lambda w: w.citation_count, reverse=True)
+                ps_span.update(
+                    output={"works_found": len(precision_works), "errors": precision_errors},
+                    **({"level": "WARNING", "status_message": f"{precision_errors} search(es) failed"} if precision_errors else {"level": "DEFAULT"}),
+                )
             self._log(f"  [green]✓[/green] {len(precision_works)} Precision Works (dedupliziert, nach Citations sortiert)")
 
             # Stage 4: Citation network expansion on top-N precision works
             top_ids = [w.work_id for w in precision_works[:_TOP_N_FOR_EXPANSION]]
             expanded_works: list[WorkResult] = []
+            expansion_failed = False
             if top_ids:
                 self._log(f"  [dim]→ Zitiernetzwerk: Top-{len(top_ids)} Works expandieren (OpenAlex)...[/dim]")
                 try:
@@ -115,13 +136,34 @@ class ResearchAggregator:
                     self._log(f"  [green]✓[/green] {len(expanded_works)} Expanded Works")
                 except Exception:
                     expanded_works = []
+                    expansion_failed = True
                     self._log("  [yellow]⚠[/yellow] Zitiernetzwerk-Expansion fehlgeschlagen (wird übersprungen)")
+
+            # Determine overall log level
+            warnings = []
+            if not relevant_topics:
+                warnings.append("no relevant topics found")
+            if eval_errors:
+                warnings.append(f"{eval_errors} evaluation(s) failed")
+            if precision_errors:
+                warnings.append(f"{precision_errors} precision search(es) failed")
+            if expansion_failed:
+                warnings.append("citation expansion failed")
+
+            if warnings:
+                level, status_message = "WARNING", "; ".join(warnings)
+            else:
+                level, status_message = "DEFAULT", None
 
             span.update(
                 output={
                     "total_works": len(precision_works) + len(expanded_works),
                     "relevant_topics": len(relevant_topics),
-                }
+                    "eval_errors": eval_errors,
+                    "precision_errors": precision_errors,
+                },
+                level=level,
+                **({"status_message": status_message} if status_message else {}),
             )
 
             return ResearchResult(

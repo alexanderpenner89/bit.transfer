@@ -10,6 +10,7 @@ For tests: construct Settings(...) directly with kwargs — no .env file needed.
 """
 from __future__ import annotations
 
+import datetime
 from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
@@ -53,6 +54,9 @@ class Settings(BaseSettings):
     # OpenAlex
     openalex_api_key: str | None = None
     openalex_max_results: int = 25
+    # Precision search date filter — defaults to today. Set to None to disable.
+    # Format: YYYY-MM-DD. Only affects precision_search, not semantic search.
+    openalex_precision_search_date: str | None = str(datetime.date.today())
 
     # Concurrency
     llm_concurrency: int = 3  # max parallel LLM calls (Ollama Cloud limit: 3)
@@ -76,6 +80,22 @@ class Settings(BaseSettings):
             if not value:
                 raise ValueError(f"{name} is required when PROVIDER={self.provider}")
         return self
+
+    def langfuse_model_name(self) -> str:
+        """Returns the bare model name for Langfuse cost tracking."""
+        match self.provider:
+            case "anthropic":
+                return self.anthropic_model
+            case "openai":
+                return self.openai_model
+            case "gemini":
+                return self.gemini_model
+            case "ollama":
+                return self.ollama_model
+            case "openrouter":
+                return self.openrouter_model
+            case _:
+                return "unknown"
 
     def build_model(self) -> str | OpenAIChatModel:
         """Returns pydantic-ai compatible model string or OpenAIChatModel object."""

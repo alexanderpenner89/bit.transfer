@@ -44,33 +44,39 @@ class OrchestratorAgent:
 
     async def generate(self, profil: GewerksProfilModel) -> SearchStrategyModel:
         """Generates a complete search strategy for the given profile."""
-        from config import get_langfuse
+        from config import get_langfuse, settings
         with get_langfuse().start_as_current_observation(
             name="orchestrator.generate",
-            as_type="agent",
+            as_type="generation",
+            model=settings.langfuse_model_name(),
             input={"gewerk_id": profil.gewerk_id, "gewerk_name": profil.gewerk_name},
         ) as span:
-            user_prompt = self._build_user_prompt(profil)
-            skills = SkillsToolset(directories=[str(_SKILLS_DIR)])
-            result = await self.agent.run(user_prompt, deps=profil, toolsets=[skills])
-            strategy = result.output
-            usage = result.usage()
+            try:
+                user_prompt = self._build_user_prompt(profil)
+                skills = SkillsToolset(directories=[str(_SKILLS_DIR)])
+                result = await self.agent.run(user_prompt, deps=profil, toolsets=[skills])
+                strategy = result.output
+                usage = result.usage()
 
-            span.update(
-                output={"query_count": len(strategy.boolean_queries_de) + len(strategy.boolean_queries_en)},
-                usage_details={
-                    "input": usage.input_tokens or 0,
-                    "output": usage.output_tokens or 0,
-                },
-            )
+                span.update(
+                    output={"query_count": len(strategy.boolean_queries_de) + len(strategy.boolean_queries_en)},
+                    usage_details={
+                        "input": usage.input_tokens or 0,
+                        "output": usage.output_tokens or 0,
+                    },
+                    level="DEFAULT",
+                )
 
-            # Ensure gewerk_id matches the input profile
-            return SearchStrategyModel(
-                **{
-                    **strategy.model_dump(),
-                    "gewerk_id": profil.gewerk_id,
-                }
-            )
+                # Ensure gewerk_id matches the input profile
+                return SearchStrategyModel(
+                    **{
+                        **strategy.model_dump(),
+                        "gewerk_id": profil.gewerk_id,
+                    }
+                )
+            except Exception as e:
+                span.update(level="ERROR", status_message=str(e))
+                raise
 
     def _build_user_prompt(self, profil: GewerksProfilModel) -> str:
         """Builds user prompt with full profile context for Chain-of-Thought."""

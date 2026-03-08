@@ -8,6 +8,8 @@ Naming convention: openalex_* prefix on all public functions.
 from __future__ import annotations
 
 import asyncio
+import logging
+import re
 from typing import Literal
 
 import pyalex
@@ -28,6 +30,14 @@ def _configure_pyalex() -> None:
 
 
 _configure_pyalex()
+
+# OpenAlex filter=default.search: does not support proximity operators (~N).
+# Strip them so the remaining boolean structure (AND/OR/NOT, wildcards) stays intact.
+_PROXIMITY_RE = re.compile(r'~\d+')
+
+
+def _strip_proximity(query: str) -> str:
+    return _PROXIMITY_RE.sub('', query)
 
 
 def _parse_work(work: dict) -> WorkResult:
@@ -114,6 +124,7 @@ async def openalex_precision_search(
     topic_name: str,
     boolean_queries: list[str],
     max_results: int = 50,
+    publication_date: str | None = None,
 ) -> list[WorkResult]:
     """Search OpenAlex for highly relevant works within a specific topic.
 
@@ -122,6 +133,8 @@ async def openalex_precision_search(
     boolean_queries: list of OpenAlex boolean query strings (AND/OR/NOT UPPERCASE,
       synonym groups in parens, wildcards min 3 chars, proximity with ~N).
       Pass the boolean_queries_de and boolean_queries_en from SearchStrategyModel.
+    publication_date: ISO date string (YYYY-MM-DD). If set, restricts results to
+      works published on that exact date.
 
     Results are sorted by citation count descending (most-cited first).
     """
@@ -132,23 +145,36 @@ async def openalex_precision_search(
             "topic_id": topic_id,
             "topic_name": topic_name,
             "query_count": len(boolean_queries),
+            "publication_date": publication_date,
         },
     ) as tool:
         def _fetch_one(q: str) -> list[dict]:
+            sanitized = _strip_proximity(q)
+            query = Works().filter(topics={"id": topic_id})
+            if publication_date:
+                query = query.filter(
+                    from_publication_date=publication_date,
+                    to_publication_date=publication_date,
+                )
             return (
-                Works()
-                .filter(topics={"id": topic_id})
-                .search_filter(default=q)
+                query
+                .search_filter(default=sanitized)
                 .sort(cited_by_count="desc")
                 .get(per_page=max_results)
             )
 
         tasks = [asyncio.to_thread(_fetch_one, q) for q in boolean_queries]
-        results_per_query = await asyncio.gather(*tasks)
+        results_per_query = await asyncio.gather(*tasks, return_exceptions=True)
+
+        failed_queries = [r for r in results_per_query if isinstance(r, Exception)]
+        for exc in failed_queries:
+            logging.warning("openalex precision_search query failed: %s", exc)
 
         seen: set[str] = set()
         merged: list[WorkResult] = []
         for raw_list in results_per_query:
+            if isinstance(raw_list, Exception):
+                continue
             for w in raw_list:
                 wid = w.get("id", "")
                 if wid not in seen:
@@ -156,7 +182,24 @@ async def openalex_precision_search(
                     merged.append(_parse_work(w))
 
         merged.sort(key=lambda w: w.citation_count, reverse=True)
-        tool.update(output={"result_count": len(merged)})
+
+        if failed_queries and not merged:
+            level = "ERROR"
+            status_message = f"All {len(failed_queries)} queries failed, no results"
+        elif failed_queries:
+            level = "WARNING"
+            status_message = f"{len(failed_queries)}/{len(boolean_queries)} queries failed"
+        elif not merged:
+            level = "WARNING"
+            status_message = "No works found for topic"
+        else:
+            level, status_message = "DEFAULT", None
+
+        tool.update(
+            output={"result_count": len(merged), "queries_failed": len(failed_queries)},
+            level=level,
+            **({"status_message": status_message} if status_message else {}),
+        )
         return merged
 
 
@@ -224,5 +267,12 @@ async def openalex_get_related_works(
                         seen.add(wid)
                         results.append(_parse_work(w))
 
-        tool.update(output={"result_count": len(results)})
+        if not results:
+            tool.update(
+                output={"result_count": 0},
+                level="WARNING",
+                status_message="No related works found",
+            )
+        else:
+            tool.update(output={"result_count": len(results)})
         return results

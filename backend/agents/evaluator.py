@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from config import get_langfuse
+from config import get_langfuse, settings
 from pydantic_ai import Agent, RunContext
 
 from schemas.gewerksprofil import GewerksProfilModel
@@ -44,7 +44,8 @@ class TopicEvaluatorAgent:
         """Evaluate whether a topic is relevant for the given craft trade profile."""
         with get_langfuse().start_as_current_observation(
             name="evaluator.evaluate",
-            as_type="agent",
+            as_type="generation",
+            model=settings.langfuse_model_name(),
             input={
                 "topic_id": candidate.topic_id,
                 "topic_name": candidate.display_name,
@@ -56,6 +57,11 @@ class TopicEvaluatorAgent:
             output = result.output
             usage = result.usage()
 
+            if output.confidence < 0.4:
+                level, status_message = "WARNING", f"Low confidence: {output.confidence:.2f}"
+            else:
+                level, status_message = "DEFAULT", None
+
             agent.update(
                 output={
                     "is_relevant": output.is_relevant,
@@ -65,6 +71,8 @@ class TopicEvaluatorAgent:
                     "input": usage.input_tokens or 0,
                     "output": usage.output_tokens or 0,
                 },
+                level=level,
+                **({"status_message": status_message} if status_message else {}),
             )
             return output
 
