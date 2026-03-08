@@ -41,7 +41,6 @@ class OrchestratorAgent:
         self._register_system_prompts()
 
     @observe(name="orchestrator.generate", as_type="agent")
-    @observe(name="orchestrator.generate", as_type="agent")
     async def generate(self, profil: GewerksProfilModel) -> SearchStrategyModel:
         """Generates a complete search strategy for the given profile."""
         user_prompt = self._build_user_prompt(profil)

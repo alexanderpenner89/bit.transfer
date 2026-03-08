@@ -4,7 +4,6 @@ Usage:
     python cli.py [--output FILE] [--verbose] [--show-queries] [--trace] <profile.json>
 """
 import asyncio
-import uuid
 
 import typer
 from rich.console import Console
@@ -71,10 +70,17 @@ def _display_strategy(strategy: SearchStrategyModel, show_queries: bool = False)
     _display_queries(strategy.semantic_queries_en, "Semantic Queries (EN)", show_queries)
 
 
-async def _generate_strategy(profil) -> SearchStrategyModel:
-    """Führt den OrchestratorAgent aus."""
+async def _generate_strategy(profil, use_trace: bool = False) -> tuple[SearchStrategyModel, str | None]:
+    """Führt den OrchestratorAgent aus, optional mit Langfuse Tracing."""
     orchestrator = OrchestratorAgent()
-    return await orchestrator.generate(profil)
+    if use_trace and langfuse:
+        with langfuse.start_as_current_span(name="cli.generate") as span:
+            span.update(input=profil.model_dump())
+            trace_id = langfuse.get_current_trace_id()
+            result = await orchestrator.generate(profil)
+            span.update(output=result.model_dump())
+            return result, trace_id
+    return await orchestrator.generate(profil), None
 
 
 @app.command()
@@ -86,12 +92,6 @@ def generate(
     trace: bool = typer.Option(False, "--trace", "-t", help="Aktiviere Langfuse Tracing für diesen Aufruf"),
 ) -> None:
     """Generiert eine Forschungsstrategie aus einem Gewerks-Profil."""
-    trace_id = None
-    if trace and langfuse:
-        trace_id = str(uuid.uuid4())
-        langfuse.trace(id=trace_id, name="cli.generate")
-        console.print(f"[dim]Trace ID: {trace_id}[/dim]")
-
     try:
         # Profil laden
         console.print(f"[dim]Lade Profil aus:[/dim] {profile_path}")
@@ -108,7 +108,9 @@ def generate(
 
         # Strategie generieren
         console.print("\n[yellow]Generiere Forschungsstrategie...[/yellow]")
-        strategy = asyncio.run(_generate_strategy(profil))
+        strategy, trace_id = asyncio.run(_generate_strategy(profil, use_trace=trace))
+        if trace_id:
+            console.print(f"[dim]Trace ID: {trace_id}[/dim]")
 
         # Anzeigen
         console.print("\n[bold green]✓ Strategie generiert![/bold green]\n")
