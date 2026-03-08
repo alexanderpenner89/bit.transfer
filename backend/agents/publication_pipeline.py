@@ -139,7 +139,11 @@ class PublicationPipeline:
                     if not isinstance(r, Exception) and r.is_interesting
                 ]
                 eval_span.update(
-                    output={"interesting": len(interesting_evals), "errors": eval_errors},
+                    output={
+                        "interesting": len(interesting_evals),
+                        "errors": eval_errors,
+                        "interesting_titles": [r.title for r in interesting_evals],
+                    },
                     **({"level": "WARNING", "status_message": f"{eval_errors} evaluation(s) failed"} if eval_errors else {"level": "DEFAULT"}),
                 )
 
@@ -259,5 +263,9 @@ class PublicationPipeline:
             )
             self._log(f"  [green]✓[/green] Dossier erstellt mit {len(dossier.key_findings)} Key Findings")
 
-            span.update(output={"articles": len(articles), "key_findings": len(dossier.key_findings)})
+            span.update(output={
+                "articles": len(articles),
+                "key_findings": len(dossier.key_findings),
+                "article_titles": [a.title for a in articles],
+            })
             return dossier
