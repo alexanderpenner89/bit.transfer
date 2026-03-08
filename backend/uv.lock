@@ -882,6 +882,7 @@ dependencies = [
     { name = "langfuse" },
     { name = "pydantic" },
     { name = "pydantic-ai" },
+    { name = "pydantic-ai-skills" },
     { name = "pydantic-settings" },
     { name = "rich" },
     { name = "typer" },
@@ -898,6 +899,7 @@ requires-dist = [
     { name = "langfuse", specifier = ">=3.9.3" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pydantic-ai", specifier = ">=0.0.36" },
+    { name = "pydantic-ai-skills", specifier = ">=0.1.0" },
     { name = "pydantic-settings", specifier = ">=2.13.1" },
     { name = "rich", specifier = ">=13.9.0" },
     { name = "typer", specifier = ">=0.15.0" },
@@ -2036,6 +2038,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/99/c2/61c8423d4d7c3a7b9c402bdb9f78aea2d6174e8f778019738b35a563fcda/pydantic_ai-1.67.0.tar.gz", hash = "sha256:87e402dbc68b10f2b8494abce110f43c1f56817ebf2bcc4fe47698899e5e8516", size = 12142, upload-time = "2026-03-06T22:40:04.927Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/01/e3/2e6f8dad1f5f7c20d54dabb8f4b50505268093078a905bfb10b77ba204dc/pydantic_ai-1.67.0-py3-none-any.whl", hash = "sha256:bc1f3264f73658891ef023861944c567a5aee96fa45eeeb4c10286550ec71ade", size = 7227, upload-time = "2026-03-06T22:39:56.895Z" },
+]
+
+[[package]]
+name = "pydantic-ai-skills"
+version = "0.5.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "pydantic-ai-slim" },
+    { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0a/e3/6069c92225b24cf97a5128e308dc32056c0ea016d16034e06f2c578e1fe3/pydantic_ai_skills-0.5.1.tar.gz", hash = "sha256:2375783fcf554581a9eeca834a4c44bfd503f7e8a67e58b771556e0ba61892cb", size = 9071286, upload-time = "2026-03-06T00:09:52.305Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a9/22/dc2a13f1525c69460033811f48dafe2c26c6ec4606116ce085d671ae5666/pydantic_ai_skills-0.5.1-py3-none-any.whl", hash = "sha256:386fded552d646bf02af0550c0bc8ed8c1e3f0a24a532219c0e2232e78b4746c", size = 47942, upload-time = "2026-03-06T00:09:50.217Z" },
 ]
 
 [[package]]

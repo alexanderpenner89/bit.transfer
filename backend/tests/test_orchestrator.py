@@ -1,4 +1,4 @@
-"""Tests für den OrchestratorAgent (E2-S2 + E2-S3).
+"""Tests für den OrchestratorAgent (optimierte Query-Generierung).
 
 Uses mock or TestModel for deterministic tests without real API calls.
 """
@@ -10,22 +10,25 @@ import pytest
 
 from agents.orchestrator import OrchestratorAgent
 from schemas.gewerksprofil import GewerksProfilModel
-from schemas.search_strategy import ForschungsFrage, SearchStrategyModel
+from schemas.search_strategy import SearchStrategyModel
 
 PROFILES_DIR = Path(__file__).parent.parent / "data" / "profiles"
 
 VALID_STRATEGY = SearchStrategyModel(
     gewerk_id="A_01_MAURER",
-    forschungsfragen=[
-        ForschungsFrage(frage=f"Forschungsfrage {i}", bezug_profilfelder=["kernkompetenzen"], prioritaet=1)
-        for i in range(3)
+    semantic_queries_en=[
+        "Load-bearing masonry construction encompasses the structural performance of brick "
+        "and limestone assemblies. Research addresses mortar joint optimization and thermal "
+        "bridge mitigation in residential building envelopes."
     ],
-    keyword_queries_de=["Mauerwerk AND Ziegel", "Beton AND Bewehrung", "Mörtel OR Putz", "Fassade AND Dämmung", "Naturstein AND Bearbeitung"],
-    keyword_queries_en=["masonry AND brick", "concrete AND reinforcement"],
-    semantic_queries_en=["load-bearing masonry construction techniques in building"],
-    hyde_abstracts=[],
-    concept_filter_ids=None,
-    max_results_per_query=50,
+    boolean_queries_de=[
+        '("Mauerwerk" OR "Ziegel" OR "Kalksandstein") AND "Tragfähigkeit"',
+        '("Mörtel" OR "Dünnbettmörtel") AND Verarbeitung',
+    ],
+    boolean_queries_en=[
+        '("masonry" OR "brickwork") AND "structural performance"',
+        '("mortar" OR "adhesive mortar") AND application',
+    ],
 )
 
 
@@ -39,6 +42,13 @@ def maurer_profil() -> GewerksProfilModel:
 def tischler_profil() -> GewerksProfilModel:
     text = (PROFILES_DIR / "tischler.json").read_text(encoding="utf-8")
     return GewerksProfilModel.model_validate_json(text)
+
+
+def _make_mock_result(strategy: SearchStrategyModel):
+    mock_result = MagicMock()
+    mock_result.output = strategy
+    mock_result.data = strategy
+    return mock_result
 
 
 class TestOrchestratorInit:
@@ -60,87 +70,64 @@ class TestOrchestratorInit:
 class TestGenerateStrategy:
     """Tests using mocked agent.run to avoid real API calls."""
 
-    def _make_mock_result(self, strategy: SearchStrategyModel):
-        """Creates a mock result that mimics pydantic-ai AgentRunResult."""
-        mock_result = MagicMock()
-        mock_result.output = strategy
-        # Some pydantic-ai versions use .data instead of .output
-        mock_result.data = strategy
-        return mock_result
-
-    def test_returns_search_strategy_model(self, maurer_profil):
+    def test_generate_returns_search_strategy_model(self, maurer_profil):
         orchestrator = OrchestratorAgent()
-        mock_result = self._make_mock_result(VALID_STRATEGY)
+        mock_result = _make_mock_result(VALID_STRATEGY)
         with patch.object(orchestrator.agent, "run", new=AsyncMock(return_value=mock_result)):
             result = asyncio.run(orchestrator.generate(maurer_profil))
         assert isinstance(result, SearchStrategyModel)
 
-    def test_gewerk_id_matches_input(self, maurer_profil):
+    def test_generate_sets_correct_gewerk_id(self, maurer_profil):
         orchestrator = OrchestratorAgent()
-        mock_result = self._make_mock_result(VALID_STRATEGY)
+        mock_result = _make_mock_result(VALID_STRATEGY)
         with patch.object(orchestrator.agent, "run", new=AsyncMock(return_value=mock_result)):
             result = asyncio.run(orchestrator.generate(maurer_profil))
         assert result.gewerk_id == maurer_profil.gewerk_id
 
-    def test_has_at_least_3_forschungsfragen(self, maurer_profil):
+    def test_generate_produces_semantic_queries_en(self, maurer_profil):
         orchestrator = OrchestratorAgent()
-        mock_result = self._make_mock_result(VALID_STRATEGY)
+        mock_result = _make_mock_result(VALID_STRATEGY)
         with patch.object(orchestrator.agent, "run", new=AsyncMock(return_value=mock_result)):
             result = asyncio.run(orchestrator.generate(maurer_profil))
-        assert len(result.forschungsfragen) >= 3
+        assert 1 <= len(result.semantic_queries_en) <= 2
 
-    def test_has_german_and_english_queries(self, maurer_profil):
+    def test_generate_produces_boolean_queries_de(self, maurer_profil):
         orchestrator = OrchestratorAgent()
-        mock_result = self._make_mock_result(VALID_STRATEGY)
+        mock_result = _make_mock_result(VALID_STRATEGY)
         with patch.object(orchestrator.agent, "run", new=AsyncMock(return_value=mock_result)):
             result = asyncio.run(orchestrator.generate(maurer_profil))
-        assert len(result.keyword_queries_de) >= 1
-        assert len(result.keyword_queries_en) >= 1
+        assert 2 <= len(result.boolean_queries_de) <= 3
 
-    def test_has_semantic_queries(self, maurer_profil):
+    def test_generate_produces_boolean_queries_en(self, maurer_profil):
         orchestrator = OrchestratorAgent()
-        mock_result = self._make_mock_result(VALID_STRATEGY)
+        mock_result = _make_mock_result(VALID_STRATEGY)
         with patch.object(orchestrator.agent, "run", new=AsyncMock(return_value=mock_result)):
             result = asyncio.run(orchestrator.generate(maurer_profil))
-        assert len(result.semantic_queries_en) >= 1
+        assert 2 <= len(result.boolean_queries_en) <= 3
 
-    def test_deterministic_queries_merged_from_keyword_extractor(self, maurer_profil):
-        """OrchestratorAgent merges KeywordExtractor queries into keyword_queries_de."""
+    def test_generate_boolean_queries_contain_operators(self, maurer_profil):
         orchestrator = OrchestratorAgent()
-        # Return a strategy with only 2 DE queries from "LLM"
-        sparse_strategy = SearchStrategyModel(
-            gewerk_id="A_01_MAURER",
-            forschungsfragen=[
-                ForschungsFrage(frage=f"F{i}", bezug_profilfelder=["kernkompetenzen"], prioritaet=1)
-                for i in range(3)
-            ],
-            keyword_queries_de=["LLM Query 1", "LLM Query 2"],
-            keyword_queries_en=["en query 1"],
-            semantic_queries_en=["semantic query"],
-            hyde_abstracts=[],
-            concept_filter_ids=None,
-        )
-        mock_result = self._make_mock_result(sparse_strategy)
+        mock_result = _make_mock_result(VALID_STRATEGY)
         with patch.object(orchestrator.agent, "run", new=AsyncMock(return_value=mock_result)):
             result = asyncio.run(orchestrator.generate(maurer_profil))
-        # After merging with KeywordExtractor, should have > 2 DE queries
-        assert len(result.keyword_queries_de) > 2
+        all_queries = result.boolean_queries_de + result.boolean_queries_en
+        assert any("AND" in q or "OR" in q for q in all_queries)
 
     def test_tischler_also_works(self, tischler_profil):
         orchestrator = OrchestratorAgent()
         tischler_strategy = SearchStrategyModel(
             gewerk_id="A_13_TISCHLER",
-            forschungsfragen=[
-                ForschungsFrage(frage=f"F{i}", bezug_profilfelder=["kernkompetenzen"], prioritaet=1)
-                for i in range(3)
+            semantic_queries_en=["Woodworking and joinery techniques encompass furniture manufacturing."],
+            boolean_queries_de=[
+                '("Holz" OR "Massivholz" OR "Furnier") AND Verarbeitung',
+                '("Tischler" OR "Schreiner") AND Handwerk',
             ],
-            keyword_queries_de=["Holz AND Verarbeitung"],
-            keyword_queries_en=["wood AND processing"],
-            semantic_queries_en=["woodworking techniques and materials"],
-            hyde_abstracts=[],
-            concept_filter_ids=None,
+            boolean_queries_en=[
+                '("wood" OR "timber") AND "manufacturing"',
+                '("joinery" OR "carpentry") AND techniques',
+            ],
         )
-        mock_result = self._make_mock_result(tischler_strategy)
+        mock_result = _make_mock_result(tischler_strategy)
         with patch.object(orchestrator.agent, "run", new=AsyncMock(return_value=mock_result)):
             result = asyncio.run(orchestrator.generate(tischler_profil))
         assert isinstance(result, SearchStrategyModel)
@@ -148,6 +135,21 @@ class TestGenerateStrategy:
 
 
 class TestSystemPrompt:
+    def test_system_prompt_contains_openalex_rules(self):
+        orchestrator = OrchestratorAgent()
+        # Check that the registered system prompt contains OpenAlex info
+        # The static prompt is embedded in the agent via _register_system_prompts
+        # We verify the orchestrator's agent has system prompts registered
+        assert orchestrator.agent is not None
+        # Check the source of system prompts includes "OpenAlex"
+        import inspect
+        source = inspect.getsource(orchestrator._register_system_prompts)
+        assert "OpenAlex" in source
+
+    def test_no_keyword_extractor_dependency(self):
+        orchestrator = OrchestratorAgent()
+        assert not hasattr(orchestrator, "_keyword_extractor")
+
     def test_user_prompt_contains_gewerk_info(self, maurer_profil):
         orchestrator = OrchestratorAgent()
         prompt = orchestrator._build_user_prompt(maurer_profil)

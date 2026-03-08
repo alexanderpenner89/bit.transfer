@@ -208,4 +208,5 @@ __marimo__/
 
 .vscode/
 
-
+# Git worktrees
+.worktrees/

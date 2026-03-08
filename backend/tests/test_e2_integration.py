@@ -1,4 +1,4 @@
-"""Integrations-Smoke-Test: ProfileParser → KeywordExtractor → OrchestratorAgent.
+"""Integrations-Smoke-Test: ProfileParser → OrchestratorAgent.
 
 Tests the full E2 pipeline without real LLM calls.
 Uses unittest.mock to mock agent.run — same pattern as test_orchestrator.py.
@@ -9,10 +9,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from agents.keyword_extractor import KeywordExtractor
 from agents.orchestrator import OrchestratorAgent
 from agents.profile_parser import ProfileParsingAgent
-from schemas.search_strategy import ForschungsFrage, SearchStrategyModel
+from schemas.search_strategy import SearchStrategyModel
 
 PROFILES_DIR = Path(__file__).parent.parent / "data" / "profiles"
 
@@ -21,16 +20,18 @@ def _make_strategy_for_gewerk(gewerk_id: str) -> SearchStrategyModel:
     """Creates a valid SearchStrategyModel for a given gewerk_id."""
     return SearchStrategyModel(
         gewerk_id=gewerk_id,
-        forschungsfragen=[
-            ForschungsFrage(frage=f"Forschungsfrage {i}", bezug_profilfelder=["kernkompetenzen"], prioritaet=1)
-            for i in range(3)
+        semantic_queries_en=[
+            "Research in this craft domain addresses material properties and structural "
+            "performance in construction and manufacturing applications."
         ],
-        keyword_queries_de=["Query DE 1", "Query DE 2"],
-        keyword_queries_en=["Query EN 1", "Query EN 2"],
-        semantic_queries_en=["semantic description for this trade"],
-        hyde_abstracts=[],
-        concept_filter_ids=None,
-        max_results_per_query=50,
+        boolean_queries_de=[
+            '("Handwerk" OR "Gewerk") AND Technik',
+            '("Werkstoff" OR "Material") AND Verarbeitung',
+        ],
+        boolean_queries_en=[
+            '("craft" OR "trade") AND techniques',
+            '("material" OR "substrate") AND processing',
+        ],
     )
 
 
@@ -62,9 +63,9 @@ class TestE2Pipeline:
 
         assert isinstance(result, SearchStrategyModel)
         assert result.gewerk_id == "A_01_MAURER"
-        assert len(result.forschungsfragen) >= 3
-        # KeywordExtractor queries merged in → should have > 2 DE queries
-        assert len(result.keyword_queries_de) >= 5
+        assert len(result.semantic_queries_en) >= 1
+        assert len(result.boolean_queries_de) >= 2
+        assert len(result.boolean_queries_en) >= 2
 
     def test_full_pipeline_all_three_profiles(self, parser, orchestrator):
         """All three pilot profiles run through the full E2 pipeline."""
@@ -85,20 +86,8 @@ class TestE2Pipeline:
             assert isinstance(result, SearchStrategyModel)
             assert result.gewerk_id == expected_id
 
-    def test_keyword_extractor_standalone_pipeline(self):
-        """E2-S1: ProfileParser → KeywordExtractor works without any LLM."""
-        parser = ProfileParsingAgent()
-        extractor = KeywordExtractor()
-
-        profil = parser.parse_file(PROFILES_DIR / "maurer.json")
-        queries = extractor.extract_keyword_queries(profil)
-
-        assert len(queries) >= 5
-        assert all(isinstance(q, str) for q in queries)
-
     def test_agents_importable_from_package(self):
         """All agent classes are importable from the agents package."""
-        from agents import KeywordExtractor, OrchestratorAgent, ProfileParsingAgent
-        assert KeywordExtractor is not None
+        from agents import OrchestratorAgent, ProfileParsingAgent
         assert OrchestratorAgent is not None
         assert ProfileParsingAgent is not None
