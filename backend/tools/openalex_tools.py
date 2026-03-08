@@ -20,16 +20,34 @@ from schemas.research_pipeline import TopicRef, WorkResult
 
 
 def _configure_pyalex() -> None:
-    """Set API key from settings if available."""
+    """Configure pyalex: API key + retry with exponential backoff for 429s."""
     try:
         from config import settings
         if settings.openalex_api_key:
             pyalex.config.api_key = settings.openalex_api_key
     except Exception:
         pass
+    pyalex.config.max_retries = 5
+    pyalex.config.retry_backoff_factor = 1.0  # waits 1s, 2s, 4s, 8s, 16s between retries
 
 
 _configure_pyalex()
+
+# Module-level semaphore — limits concurrent OpenAlex HTTP requests to avoid 429s.
+# Re-created whenever the running event loop changes (e.g. between test cases).
+_openalex_sem: asyncio.Semaphore | None = None
+_openalex_sem_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_sem() -> asyncio.Semaphore:
+    global _openalex_sem, _openalex_sem_loop
+    loop = asyncio.get_event_loop()
+    if _openalex_sem is None or _openalex_sem_loop is not loop:
+        from config import settings
+        _openalex_sem = asyncio.Semaphore(settings.openalex_concurrency)
+        _openalex_sem_loop = loop
+    return _openalex_sem
+
 
 # OpenAlex filter=default.search: does not support proximity operators (~N).
 # Strip them so the remaining boolean structure (AND/OR/NOT, wildcards) stays intact.
@@ -102,7 +120,8 @@ async def openalex_semantic_search(
         def _search() -> list[dict]:
             return Works().search(query).get(per_page=max_results)
 
-        raw = await asyncio.to_thread(_search)
+        async with _get_sem():
+            raw = await asyncio.to_thread(_search)
 
         if not raw:
             tool.update(
@@ -134,7 +153,7 @@ async def openalex_precision_search(
       synonym groups in parens, wildcards min 3 chars, proximity with ~N).
       Pass the boolean_queries_de and boolean_queries_en from SearchStrategyModel.
     publication_date: ISO date string (YYYY-MM-DD). If set, restricts results to
-      works published on that exact date.
+      works published on or after that date (from_publication_date filter, free tier compatible).
 
     Results are sorted by citation count descending (most-cited first).
     """
@@ -145,17 +164,15 @@ async def openalex_precision_search(
             "topic_id": topic_id,
             "topic_name": topic_name,
             "query_count": len(boolean_queries),
-            "publication_date": publication_date,
+            "queries": boolean_queries,
+            "from_publication_date": publication_date,
         },
     ) as tool:
         def _fetch_one(q: str) -> list[dict]:
             sanitized = _strip_proximity(q)
             query = Works().filter(topics={"id": topic_id})
             if publication_date:
-                query = query.filter(
-                    from_publication_date=publication_date,
-                    to_publication_date=publication_date,
-                )
+                query = query.filter(from_publication_date=publication_date)
             return (
                 query
                 .search_filter(default=sanitized)
@@ -163,7 +180,11 @@ async def openalex_precision_search(
                 .get(per_page=max_results)
             )
 
-        tasks = [asyncio.to_thread(_fetch_one, q) for q in boolean_queries]
+        async def _fetch_one_throttled(q: str) -> list[dict]:
+            async with _get_sem():
+                return await asyncio.to_thread(_fetch_one, q)
+
+        tasks = [_fetch_one_throttled(q) for q in boolean_queries]
         results_per_query = await asyncio.gather(*tasks, return_exceptions=True)
 
         failed_queries = [r for r in results_per_query if isinstance(r, Exception)]
@@ -228,7 +249,11 @@ async def openalex_get_related_works(
             def _fetch_cited_by(wid: str) -> list[dict]:
                 return Works().filter(cites=wid).get(per_page=max_per_work)
 
-            tasks = [asyncio.to_thread(_fetch_cited_by, wid) for wid in work_ids]
+            async def _fetch_cited_by_throttled(wid: str) -> list[dict]:
+                async with _get_sem():
+                    return await asyncio.to_thread(_fetch_cited_by, wid)
+
+            tasks = [_fetch_cited_by_throttled(wid) for wid in work_ids]
             all_results = await asyncio.gather(*tasks)
             for raw_list in all_results:
                 for w in raw_list:
@@ -242,7 +267,11 @@ async def openalex_get_related_works(
                 items = Works().filter(openalex=wid).get(per_page=1)
                 return items[0] if items else None
 
-            source_tasks = [asyncio.to_thread(_fetch_work, wid) for wid in work_ids]
+            async def _fetch_work_throttled(wid: str) -> dict | None:
+                async with _get_sem():
+                    return await asyncio.to_thread(_fetch_work, wid)
+
+            source_tasks = [_fetch_work_throttled(wid) for wid in work_ids]
             source_works = await asyncio.gather(*source_tasks)
 
             ref_ids: list[str] = []
@@ -260,7 +289,8 @@ async def openalex_get_related_works(
                 def _fetch_refs() -> list[dict]:
                     return Works().filter(openalex="|".join(ref_ids)).get(per_page=len(ref_ids))
 
-                raw = await asyncio.to_thread(_fetch_refs)
+                async with _get_sem():
+                    raw = await asyncio.to_thread(_fetch_refs)
                 for w in raw:
                     wid = w.get("id", "")
                     if wid not in seen:

@@ -25,7 +25,11 @@ from schemas.search_strategy import SearchStrategyModel
 def strategy() -> SearchStrategyModel:
     return SearchStrategyModel(
         gewerk_id="A_01_MAURER",
-        semantic_queries_en=["Load-bearing masonry and thermal performance."],
+        semantic_queries_en=[
+            "Load-bearing masonry and thermal performance.",
+            "Mortar joint optimization in residential building envelopes.",
+            "Brick masonry structural integrity and durability.",
+        ],
         boolean_queries_de=[
             '("Mauerwerk" OR "Ziegel") AND "Tragfähigkeit"',
             '("Mörtel" OR "Dünnbettmörtel") AND Verarbeitung',
@@ -263,7 +267,9 @@ class TestResearchAggregatorIntegration:
         strategy = SearchStrategyModel(
             gewerk_id="A_01_MAURER",
             semantic_queries_en=[
-                "Load-bearing masonry construction structural performance brick mortar."
+                "Load-bearing masonry construction structural performance brick mortar.",
+                "Mortar joint optimization in residential building envelopes.",
+                "Brick masonry structural integrity and durability.",
             ],
             boolean_queries_de=[
                 '("Mauerwerk" OR "Ziegel") AND "Tragfähigkeit"',

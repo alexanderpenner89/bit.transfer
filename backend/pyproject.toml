@@ -29,6 +29,7 @@ py-modules = ["cli", "config"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+addopts = "-m 'not integration'"
 markers = [
     "integration: marks tests as integration tests (require internet, deselect with -m 'not integration')",
 ]

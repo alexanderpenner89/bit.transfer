@@ -29,7 +29,8 @@ class PrecisionSearchAgent:
                 "topic_id": topic.topic_id,
                 "topic_name": topic.display_name,
                 "query_count": len(boolean_queries),
-                "publication_date": settings.openalex_precision_search_date,
+                "queries": boolean_queries,
+                "from_publication_date": settings.openalex_precision_search_date,
             },
         ) as obs:
             try:

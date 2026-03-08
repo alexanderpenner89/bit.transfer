@@ -54,12 +54,13 @@ class Settings(BaseSettings):
     # OpenAlex
     openalex_api_key: str | None = None
     openalex_max_results: int = 25
-    # Precision search date filter — defaults to today. Set to None to disable.
-    # Format: YYYY-MM-DD. Only affects precision_search, not semantic search.
-    openalex_precision_search_date: str | None = str(datetime.date.today())
+    # Precision search date filter — filters by publication_date (free tier compatible).
+    # Format: YYYY-MM-DD. Defaults to 30 days ago (rolling window). Set to None to disable.
+    openalex_precision_search_date: str | None = str(datetime.date.today() - datetime.timedelta(days=30))
 
     # Concurrency
     llm_concurrency: int = 3  # max parallel LLM calls (Ollama Cloud limit: 3)
+    openalex_concurrency: int = 1  # max parallel OpenAlex API requests (free tier: 1 = sequential to avoid 429)
 
     # Langfuse Tracing
     langfuse_secret_key: str | None = None

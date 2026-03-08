@@ -9,8 +9,9 @@ class TestSearchStrategyModel:
         return {
             "gewerk_id": "A_01_MAURER",
             "semantic_queries_en": [
-                "Load-bearing masonry construction techniques focus on the structural performance "
-                "of brick and mortar assemblies in residential and commercial buildings."
+                "Load-bearing masonry construction techniques and structural performance.",
+                "Mortar joint optimization in residential building envelopes.",
+                "Brick masonry thermal performance and durability.",
             ],
             "boolean_queries_de": [
                 '("Mauerwerk" OR "Ziegel" OR "Kalksandstein") AND "Tragfähigkeit"',
@@ -25,7 +26,7 @@ class TestSearchStrategyModel:
     def test_valid_model_requires_3_fields_only(self):
         strategy = SearchStrategyModel(**self._valid_data())
         assert strategy.gewerk_id == "A_01_MAURER"
-        assert len(strategy.semantic_queries_en) == 1
+        assert len(strategy.semantic_queries_en) == 3
         assert len(strategy.boolean_queries_de) == 2
         assert len(strategy.boolean_queries_en) == 2
 
@@ -41,9 +42,9 @@ class TestSearchStrategyModel:
         with pytest.raises(ValidationError):
             SearchStrategyModel(**data)
 
-    def test_semantic_queries_en_max_2(self):
+    def test_semantic_queries_en_max_10(self):
         data = self._valid_data()
-        data["semantic_queries_en"] = ["query one", "query two", "query three"]
+        data["semantic_queries_en"] = [f"query {i}" for i in range(11)]
         with pytest.raises(ValidationError):
             SearchStrategyModel(**data)
 

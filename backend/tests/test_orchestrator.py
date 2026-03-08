@@ -18,8 +18,9 @@ VALID_STRATEGY = SearchStrategyModel(
     gewerk_id="A_01_MAURER",
     semantic_queries_en=[
         "Load-bearing masonry construction encompasses the structural performance of brick "
-        "and limestone assemblies. Research addresses mortar joint optimization and thermal "
-        "bridge mitigation in residential building envelopes."
+        "and limestone assemblies.",
+        "Mortar joint optimization and thermal bridge mitigation in residential buildings.",
+        "Brick masonry structural integrity durability and quality assessment.",
     ],
     boolean_queries_de=[
         '("Mauerwerk" OR "Ziegel" OR "Kalksandstein") AND "Tragfähigkeit"',
@@ -89,7 +90,7 @@ class TestGenerateStrategy:
         mock_result = _make_mock_result(VALID_STRATEGY)
         with patch.object(orchestrator.agent, "run", new=AsyncMock(return_value=mock_result)):
             result = asyncio.run(orchestrator.generate(maurer_profil))
-        assert 1 <= len(result.semantic_queries_en) <= 2
+        assert 3 <= len(result.semantic_queries_en) <= 10
 
     def test_generate_produces_boolean_queries_de(self, maurer_profil):
         orchestrator = OrchestratorAgent()
@@ -117,7 +118,11 @@ class TestGenerateStrategy:
         orchestrator = OrchestratorAgent()
         tischler_strategy = SearchStrategyModel(
             gewerk_id="A_13_TISCHLER",
-            semantic_queries_en=["Woodworking and joinery techniques encompass furniture manufacturing."],
+            semantic_queries_en=[
+                "Woodworking and joinery techniques encompass furniture manufacturing.",
+                "Timber processing and wood material properties for structural applications.",
+                "Surface finishing and coating techniques for wood products.",
+            ],
             boolean_queries_de=[
                 '("Holz" OR "Massivholz" OR "Furnier") AND Verarbeitung',
                 '("Tischler" OR "Schreiner") AND Handwerk',

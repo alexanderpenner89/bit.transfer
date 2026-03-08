@@ -18,6 +18,7 @@ STRATEGY = SearchStrategyModel(
     semantic_queries_en=[
         "Load-bearing masonry construction and thermal performance.",
         "Mortar joint optimization in residential building envelopes.",
+        "Brick masonry structural integrity and durability assessment.",
     ],
     boolean_queries_de=[
         '("Mauerwerk" OR "Ziegel") AND "Tragfähigkeit"',
