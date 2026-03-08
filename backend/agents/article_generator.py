@@ -64,8 +64,13 @@ class ArticleGeneratorAgent:
             model=settings.langfuse_model_name(),
             input={
                 "work_id": deps.work_id,
+                "title": deps.work.title,
                 "gewerk_name": deps.gewerk_context.gewerk_name,
                 "perspective_count": perspective_count,
+                "perspectives": [
+                    {"work_id": p.work_id, "title": p.title}
+                    for p in deps.perspectives
+                ],
             },
         ) as obs:
             user_prompt = self._build_user_prompt(deps)
@@ -74,7 +79,17 @@ class ArticleGeneratorAgent:
             usage = result.usage()
 
             obs.update(
-                output={"source_count": len(output.sources)},
+                output={
+                    "source_count": len(output.sources),
+                    "sources": [
+                        {
+                            "work_id": s.work_id,
+                            "title": s.title,
+                            "citation_type": s.citation_type,
+                        }
+                        for s in output.sources
+                    ],
+                },
                 usage_details={
                     "input": usage.input_tokens or 0,
                     "output": usage.output_tokens or 0,
