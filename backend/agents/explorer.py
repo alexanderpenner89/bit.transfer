@@ -21,9 +21,12 @@ class ExplorerAgent:
     async def run(
         self,
         strategy: SearchStrategyModel,
+        max_queries: int | None = None,
     ) -> ExplorationResult:
         """Run all semantic queries in parallel and aggregate results."""
         queries = strategy.semantic_queries_en
+        if max_queries:
+            queries = queries[:max_queries]
 
         with get_langfuse().start_as_current_observation(
             name="explorer.run",

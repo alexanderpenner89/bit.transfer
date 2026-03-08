@@ -22,7 +22,9 @@ def _make_strategy_for_gewerk(gewerk_id: str) -> SearchStrategyModel:
         gewerk_id=gewerk_id,
         semantic_queries_en=[
             "Research in this craft domain addresses material properties and structural "
-            "performance in construction and manufacturing applications."
+            "performance in construction and manufacturing applications.",
+            "Craft trade techniques and materials for quality and safety in production.",
+            "Digital tools and automation in modern craft trade workflows.",
         ],
         boolean_queries_de=[
             '("Handwerk" OR "Gewerk") AND Technik',

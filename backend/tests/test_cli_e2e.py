@@ -52,7 +52,7 @@ def test_e2e_full_workflow():
             mock_orch.generate = AsyncMock(return_value=mock_strategy)
             mock_orch_class.return_value = mock_orch
 
-            result = runner.invoke(app, [profile_path])
+            result = runner.invoke(app, ["generate", profile_path])
 
         assert result.exit_code == 0
         assert "Strategie generiert" in result.output
@@ -92,7 +92,7 @@ def test_e2e_with_output_file():
             mock_orch.generate = AsyncMock(return_value=mock_strategy)
             mock_orch_class.return_value = mock_orch
 
-            result = runner.invoke(app, [profile_path, "--output", output_path])
+            result = runner.invoke(app, ["generate", profile_path, "--output", output_path])
 
         assert result.exit_code == 0
         assert Path(output_path).exists()

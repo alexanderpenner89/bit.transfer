@@ -30,13 +30,23 @@ _TOP_N_FOR_EXPANSION = 10
 class ResearchAggregator:
     """Orchestrates the full 4-stage research pipeline."""
 
-    def __init__(self, model=None, on_progress: Callable[[str], None] | None = None) -> None:
+    def __init__(
+        self,
+        model=None,
+        on_progress: Callable[[str], None] | None = None,
+        max_topics: int | None = None,
+        max_queries: int | None = None,
+        skip_expansion: bool = False,
+    ) -> None:
         from config import settings
         self._explorer = ExplorerAgent()
         self._evaluator = TopicEvaluatorAgent(model=model)
-        self._precision = PrecisionSearchAgent(model=model)
+        self._precision = PrecisionSearchAgent()
         self._log = on_progress or (lambda _: None)
         self._llm_sem = asyncio.Semaphore(settings.llm_concurrency)
+        self._max_topics = max_topics
+        self._max_queries = max_queries
+        self._skip_expansion = skip_expansion
 
     async def _llm(self, coro: Coroutine[Any, Any, _T]) -> _T:
         """Run a coroutine with the LLM concurrency semaphore."""
@@ -56,12 +66,16 @@ class ResearchAggregator:
             input={"gewerk_id": strategy.gewerk_id, "gewerk_name": profil.gewerk_name},
         ) as span:
             # Stage 1: Parallel semantic search
-            self._log(f"  [dim]→ Semantische Suche: {len(strategy.semantic_queries_en)} Queries parallel...[/dim]")
-            exploration = await self._explorer.run(strategy)
+            semantic_query_count = min(len(strategy.semantic_queries_en), self._max_queries) if self._max_queries else len(strategy.semantic_queries_en)
+            self._log(f"  [dim]→ Semantische Suche: {semantic_query_count} Queries parallel...[/dim]")
+            exploration = await self._explorer.run(strategy, max_queries=self._max_queries)
             self._log(f"  [green]✓[/green] {len(exploration.works)} Works gefunden, {len(exploration.topic_candidates)} Topics entdeckt")
 
             # Stage 2: Parallel topic evaluation
-            n = len(exploration.topic_candidates)
+            topic_candidates = exploration.topic_candidates
+            if self._max_topics:
+                topic_candidates = topic_candidates[: self._max_topics]
+            n = len(topic_candidates)
             self._log(f"  [dim]→ Topic-Evaluierung: {n} Topics parallel (LLM)...[/dim]")
             with get_langfuse().start_as_current_observation(
                 name="evaluator.batch",
@@ -71,7 +85,7 @@ class ResearchAggregator:
                 evaluations = await asyncio.gather(
                     *[
                         self._llm(self._evaluator.evaluate(candidate, profil))
-                        for candidate in exploration.topic_candidates
+                        for candidate in topic_candidates
                     ],
                     return_exceptions=True,
                 )
@@ -91,6 +105,8 @@ class ResearchAggregator:
             all_boolean_queries = (
                 strategy.boolean_queries_de + strategy.boolean_queries_en
             )
+            if self._max_queries:
+                all_boolean_queries = all_boolean_queries[: self._max_queries]
             self._log(f"  [dim]→ Präzisionssuche: {len(relevant_topics)} Topics × {len(all_boolean_queries)} Queries parallel (OpenAlex)...[/dim]")
             with get_langfuse().start_as_current_observation(
                 name="precision_search.batch",
@@ -127,7 +143,7 @@ class ResearchAggregator:
             top_ids = [w.work_id for w in precision_works[:_TOP_N_FOR_EXPANSION]]
             expanded_works: list[WorkResult] = []
             expansion_failed = False
-            if top_ids:
+            if top_ids and not self._skip_expansion:
                 self._log(f"  [dim]→ Zitiernetzwerk: Top-{len(top_ids)} Works expandieren (OpenAlex)...[/dim]")
                 try:
                     expanded_works = await openalex_get_related_works(
@@ -138,6 +154,8 @@ class ResearchAggregator:
                     expanded_works = []
                     expansion_failed = True
                     self._log("  [yellow]⚠[/yellow] Zitiernetzwerk-Expansion fehlgeschlagen (wird übersprungen)")
+            elif self._skip_expansion:
+                self._log("  [dim]→ Zitiernetzwerk-Expansion übersprungen (--lite)[/dim]")
 
             # Determine overall log level
             warnings = []
