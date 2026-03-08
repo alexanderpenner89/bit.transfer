@@ -248,7 +248,6 @@ class PublicationPipeline:
                     title=art.title,
                     intro=art.intro,
                     key_learnings=art.key_learnings,
-                    gewerk_insights=art.gewerk_insights,
                 )
                 for art in articles
             ]
