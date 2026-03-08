@@ -1,0 +1,31 @@
+{{!< default}}
+
+<main class="site-main">
+    <section class="hero hero-tag">
+        <div class="container">
+            {{#tag}}
+            <p class="hero-eyebrow">Gewerk</p>
+            <h1 class="hero-title">{{name}}</h1>
+            {{#if description}}
+            <p class="hero-description">{{description}}</p>
+            {{/if}}
+            {{/tag}}
+        </div>
+    </section>
+
+    <div class="container">
+        <div class="content-layout">
+
+            <section class="gewerke-section">
+                <div class="posts-container" id="posts-container" data-layout="grid">
+                    {{#foreach posts}}
+                        {{> "post-card"}}
+                    {{/foreach}}
+                </div>
+                {{pagination}}
+            </section>
+
+            {{> "sidebar"}}
+        </div>
+    </div>
+</main>

@@ -1,0 +1,15 @@
+<header class="site-header">
+    <div class="container">
+        <div class="header-inner">
+            <a href="{{@site.url}}" class="site-logo" aria-label="{{@site.title}} – Startseite">
+                <span class="logo-mark" aria-hidden="true">bt</span>
+                <span class="logo-text">bit.transfer</span>
+            </a>
+            <nav class="site-nav" aria-label="Hauptnavigation">
+                {{#foreach @site.navigation}}
+                <a href="{{this.url}}" class="{{link_class for=this.url}}" aria-current="{{#if current}}page{{/if}}">{{label}}</a>
+                {{/foreach}}
+            </nav>
+        </div>
+    </div>
+</header>

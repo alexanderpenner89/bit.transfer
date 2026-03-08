@@ -1,0 +1,74 @@
+{{!< default}}
+
+<main class="site-main">
+    <div class="container">
+        <div class="content-layout">
+
+            <article class="post-full {{post_class}}">
+
+                {{#post}}
+
+                <header class="post-header">
+                    <h1 class="post-title">{{title}}</h1>
+
+                    {{#if custom_excerpt}}
+                    <p class="post-subtitle">{{custom_excerpt}}</p>
+                    {{/if}}
+
+                    <div class="post-meta">
+                        <time datetime="{{date format="YYYY-MM-DD"}}">
+                            {{date format="DD. MMMM YYYY"}}
+                        </time>
+                        <span class="reading-time">{{reading_time}}</span>
+                        {{#if primary_author}}
+                        <span class="post-author">{{primary_author.name}}</span>
+                        {{/if}}
+                    </div>
+
+                    {{#if tags}}
+                    <div class="post-tags-meta">
+                        {{#foreach tags}}
+                        <a href="{{url}}" class="tag-pill">{{name}}</a>
+                        {{/foreach}}
+                    </div>
+                    {{/if}}
+                </header>
+
+                {{#if feature_image}}
+                <figure class="post-feature-image">
+                    <img src="{{img_url feature_image size="lg"}}" alt="{{#if feature_image_alt}}{{feature_image_alt}}{{else}}{{title}}{{/if}}">
+                    {{#if feature_image_caption}}
+                    <figcaption>{{feature_image_caption}}</figcaption>
+                    {{/if}}
+                </figure>
+                {{/if}}
+
+                <section class="post-content gh-content">
+                    {{content}}
+                </section>
+
+                <footer class="post-footer">
+                    <nav class="post-navigation" aria-label="Artikel-Navigation">
+                        {{#prev_post}}
+                        <a href="{{url}}" class="nav-prev">
+                            <span class="nav-label">← Vorheriger Artikel</span>
+                            <span class="nav-title">{{title}}</span>
+                        </a>
+                        {{/prev_post}}
+                        {{#next_post}}
+                        <a href="{{url}}" class="nav-next">
+                            <span class="nav-label">Nächster Artikel →</span>
+                            <span class="nav-title">{{title}}</span>
+                        </a>
+                        {{/next_post}}
+                    </nav>
+                </footer>
+
+                {{/post}}
+            </article>
+
+            {{> "sidebar"}}
+
+        </div>
+    </div>
+</main>

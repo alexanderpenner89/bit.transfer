@@ -1,0 +1,35 @@
+{
+    "name": "bit-transfer",
+    "description": "Wissenschaftlicher Technologietransfer für das Handwerk",
+    "version": "1.0.0",
+    "license": "MIT",
+    "keywords": ["ghost-theme"],
+    "author": {
+        "email": "info@bit-transfer.de"
+    },
+    "config": {
+        "posts_per_page": 8,
+        "card_assets": true,
+        "image_sizes": {
+            "xs": 150,
+            "sm": 300,
+            "md": 600,
+            "lg": 1000,
+            "xl": 2000
+        },
+        "custom": {
+            "newsletter_signup_label": {
+                "type": "text",
+                "default": "NEWSLETTER AUSWÄHLEN",
+                "description": "Button-Text im Newsletter CTA",
+                "group": "homepage"
+            },
+            "sidebar_newsletter_text": {
+                "type": "text",
+                "default": "Forschung direkt ins Postfach — wöchentlich oder gewerk-spezifisch.",
+                "description": "Text im Sidebar Newsletter-Block",
+                "group": "homepage"
+            }
+        }
+    }
+}

@@ -1,0 +1,112 @@
+{{!< default}}
+
+<main class="site-main home-main">
+
+    {{! ── Section 1: Neueste Dossiers ── }}
+    <section class="dossiers-section">
+        <div class="container">
+            <div class="dossiers-header">
+                <h2 class="section-label">Neueste Dossiers</h2>
+            </div>
+
+            <div class="dossiers-grid">
+                {{#foreach posts}}
+                    {{> "dossier-card"}}
+                {{/foreach}}
+            </div>
+
+            {{#if pagination.next}}
+            <div class="dossiers-more">
+                <a href="{{page_url pagination.next}}" class="see-more-btn">Weitere Dossiers →</a>
+            </div>
+            {{/if}}
+        </div>
+    </section>
+
+    {{! ── Section 2: Gewerke erkunden ── }}
+    <section class="gewerke-explorer">
+        <div class="container">
+            <p class="explorer-label">Tiefer einsteigen</p>
+
+            <div class="gewerbegruppen" id="gewerbegruppen">
+
+                <div class="gewerbegruppe" data-group="bau-rohbau">
+                    <button class="gruppe-trigger" aria-expanded="false">
+                        <span class="gruppe-name">Bau &amp; Rohbau</span>
+                        <span class="gruppe-arrow" aria-hidden="true">↓</span>
+                    </button>
+                    <div class="gruppe-gewerke" hidden>
+                        <a href="/tag/maurer/" class="gewerk-link">Maurer</a>
+                        <a href="/tag/zimmerer/" class="gewerk-link">Zimmerer</a>
+                        <a href="/tag/dachdecker/" class="gewerk-link">Dachdecker</a>
+                        <a href="/tag/estrichleger/" class="gewerk-link">Estrichleger</a>
+                        <a href="/tag/geruest/" class="gewerk-link">Gerüstbauer</a>
+                        <a href="/tag/steinmetz/" class="gewerk-link">Steinmetz</a>
+                    </div>
+                </div>
+
+                <div class="gewerbegruppe" data-group="technik-energie">
+                    <button class="gruppe-trigger" aria-expanded="false">
+                        <span class="gruppe-name">Technik &amp; Energie</span>
+                        <span class="gruppe-arrow" aria-hidden="true">↓</span>
+                    </button>
+                    <div class="gruppe-gewerke" hidden>
+                        <a href="/tag/shk/" class="gewerk-link">Sanitär-Heizung-Klima</a>
+                        <a href="/tag/elektroinstallateur/" class="gewerk-link">Elektroinstallateur</a>
+                        <a href="/tag/kaeltetechniker/" class="gewerk-link">Kältetechniker</a>
+                        <a href="/tag/isolierer/" class="gewerk-link">Isolierer</a>
+                        <a href="/tag/schornsteinfeger/" class="gewerk-link">Schornsteinfeger</a>
+                        <a href="/tag/elektroniker-it/" class="gewerk-link">IT &amp; Telekommunikation</a>
+                    </div>
+                </div>
+
+                <div class="gewerbegruppe" data-group="ausbau-innenausbau">
+                    <button class="gruppe-trigger" aria-expanded="false">
+                        <span class="gruppe-name">Ausbau &amp; Innenausbau</span>
+                        <span class="gruppe-arrow" aria-hidden="true">↓</span>
+                    </button>
+                    <div class="gruppe-gewerke" hidden>
+                        <a href="/tag/tischler/" class="gewerk-link">Tischler / Schreiner</a>
+                        <a href="/tag/stuckateur/" class="gewerk-link">Stuckateur</a>
+                        <a href="/tag/trockenbauer/" class="gewerk-link">Trockenbauer</a>
+                        <a href="/tag/fliesenleger/" class="gewerk-link">Fliesenleger</a>
+                        <a href="/tag/bodenleger/" class="gewerk-link">Bodenleger</a>
+                        <a href="/tag/parkettleger/" class="gewerk-link">Parkettleger</a>
+                        <a href="/tag/glaser/" class="gewerk-link">Glaser</a>
+                        <a href="/tag/rollladen/" class="gewerk-link">Rollladen &amp; Sonnenschutz</a>
+                    </div>
+                </div>
+
+                <div class="gewerbegruppe" data-group="gestaltung-material">
+                    <button class="gruppe-trigger" aria-expanded="false">
+                        <span class="gruppe-name">Gestaltung &amp; Material</span>
+                        <span class="gruppe-arrow" aria-hidden="true">↓</span>
+                    </button>
+                    <div class="gruppe-gewerke" hidden>
+                        <a href="/tag/maler-lackierer/" class="gewerk-link">Maler und Lackierer</a>
+                        <a href="/tag/metallbauer/" class="gewerk-link">Metallbauer / Schlosser</a>
+                        <a href="/tag/landschaftsgaertner/" class="gewerk-link">Landschaftsgärtner</a>
+                    </div>
+                </div>
+
+                <div class="gewerbegruppe" data-group="handwerk-lebensstil">
+                    <button class="gruppe-trigger" aria-expanded="false">
+                        <span class="gruppe-name">Handwerk &amp; Lebensstil</span>
+                        <span class="gruppe-arrow" aria-hidden="true">↓</span>
+                    </button>
+                    <div class="gruppe-gewerke" hidden>
+                        <a href="/tag/baecker/" class="gewerk-link">Bäcker</a>
+                        <a href="/tag/fleischer/" class="gewerk-link">Fleischer / Metzger</a>
+                        <a href="/tag/friseur/" class="gewerk-link">Friseur</a>
+                        <a href="/tag/zahntechniker/" class="gewerk-link">Zahntechniker</a>
+                        <a href="/tag/optiker/" class="gewerk-link">Augenoptiker</a>
+                        <a href="/tag/kfz-mechatroniker/" class="gewerk-link">Kfz-Mechatroniker</a>
+                        <a href="/tag/uhrmacher/" class="gewerk-link">Uhrmacher</a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+</main>
