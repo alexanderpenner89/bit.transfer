@@ -163,7 +163,11 @@ class TestSystemPrompt:
     def test_user_prompt_contains_recipe_instructions(self, maurer_profil):
         orchestrator = OrchestratorAgent()
         prompt = orchestrator._build_user_prompt(maurer_profil)
-        assert "Synonym-Cluster" in prompt or "Cluster" in prompt
-        assert "Wildcard" in prompt or "*" in prompt
-        assert "Proximity" in prompt or "~" in prompt
-        assert "Selbstprüfung" in prompt or "Selbst" in prompt
+        assert "Schritt 2" in prompt
+        assert "Schritt 3" in prompt
+        assert "Schritt 4" in prompt
+        assert "Selbstprüfung" in prompt
+        assert "Synonym-Cluster" in prompt
+        assert "Wildcard" in prompt
+        assert "Proximity" in prompt
+        assert "Wenn eine Prüfung fehlschlägt" in prompt
