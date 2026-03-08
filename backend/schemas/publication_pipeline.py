@@ -38,24 +38,12 @@ class PerspectiveResult(BaseModel):
     related_works: list[WorkSummary]  # Ergänzende Perspektiven (5–10)
 
 
-class ArticleSource(BaseModel):
-    work_id: str
-    title: str
-    doi: str | None
-    publication_year: int | None
-    citation_type: str             # "primary" | "supporting" | "contrasting"
-
-
 class EnrichedArticle(BaseModel):
     work_id: str
     title: str
-    intro: str
-    core_messages: list[str]
-    key_learnings: list[str]
-    gewerk_insights: str
-    perspectives: str              # Unterstützende & gegensätzliche Perspektiven
-    conclusion: str
-    sources: list[ArticleSource]   # Quellenverweise
+    html: str                   # Full HTML article (800–1200 words)
+    intro: str                  # Brief plain-text intro (for DossierAgent + CLI + excerpt)
+    key_learnings: list[str]    # Kept for DossierAgent meta-synthesis
 
 
 class DossierModel(BaseModel):
