@@ -895,7 +895,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anthropic", specifier = ">=0.84.0" },
-    { name = "langfuse", specifier = ">=2.0.0" },
+    { name = "langfuse", specifier = ">=3.9.3" },
     { name = "pydantic", specifier = ">=2.0.0" },
     { name = "pydantic-ai", specifier = ">=0.0.36" },
     { name = "pydantic-settings", specifier = ">=2.13.1" },
