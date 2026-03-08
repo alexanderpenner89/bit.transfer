@@ -21,7 +21,6 @@ class ArticleSummary(BaseModel):
     title: str
     intro: str
     key_learnings: list[str]
-    gewerk_insights: str
 
 
 @dataclass
@@ -102,7 +101,6 @@ class DossierAgent:
                 f"\n**Artikel {i}: {art.title}**\n"
                 f"  {art.intro}\n"
                 f"  Key Learnings:\n{learnings}\n"
-                f"  Gewerk-Insights: {art.gewerk_insights[:200]}...\n"
             )
 
         return f"""Erstelle ein Executive Summary und übergreifende Schlüsselerkenntnisse für das folgende Forschungsdossier.
