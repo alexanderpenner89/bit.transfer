@@ -12,6 +12,7 @@ dependencies = [
     "typer>=0.15.0",
     "rich>=13.9.0",
     "pydantic-ai-skills>=0.1.0",
+    "pyalex>=0.21",
 ]
 
 [dependency-groups]
@@ -28,3 +29,6 @@ py-modules = ["cli", "config"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+markers = [
+    "integration: marks tests as integration tests (require internet, deselect with -m 'not integration')",
+]
