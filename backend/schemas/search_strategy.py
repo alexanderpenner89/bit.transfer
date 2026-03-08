@@ -8,8 +8,8 @@ class SearchStrategyModel(BaseModel):
 
     gewerk_id: str = Field(..., description="Referenz zum Quell-Profil")
     semantic_queries_en: list[str] = Field(
-        ..., min_length=1, max_length=2,
-        description="1–2 englischsprachige Absätze (ca. 50–100 Wörter), konzeptionell, keine Boolean-Operatoren"
+        ..., min_length=3, max_length=10,
+        description="5–10 kurze englische Phrasen (je 5–15 Wörter), keyword-fokussiert, keine Boolean-Operatoren, kein Fließtext"
     )
     boolean_queries_de: list[str] = Field(
         ..., min_length=2, max_length=3,

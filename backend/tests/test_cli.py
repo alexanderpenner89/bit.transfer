@@ -20,7 +20,7 @@ def test_generate_with_valid_profile():
     with patch("cli.ProfileParsingAgent") as mock_parser:
         mock_parser.return_value.parse_file.return_value = mock_profil
 
-        result = runner.invoke(app, ["test_profile.json"])
+        result = runner.invoke(app, ["generate", "test_profile.json"])
 
     assert result.exit_code == 0
     assert "TEST_01" in result.output or "Lade Profil" in result.output
@@ -42,19 +42,19 @@ def test_generate_calls_orchestrator():
         mock_orch_instance.generate = AsyncMock(return_value=mock_strategy)
         mock_orch.return_value = mock_orch_instance
 
-        result = runner.invoke(app, ["maurer.json"])
+        result = runner.invoke(app, ["generate", "maurer.json"])
 
     assert result.exit_code == 0
     mock_orch_instance.generate.assert_called_once()
 
 
 def test_file_not_found_error():
-    result = runner.invoke(app, ["nonexistent.json"])
+    result = runner.invoke(app, ["generate", "nonexistent.json"])
     assert result.exit_code == 1
     assert "nicht gefunden" in result.output or "not found" in result.output.lower()
 
 
 def test_verbose_shows_traceback():
-    result = runner.invoke(app, ["nonexistent.json", "--verbose"])
+    result = runner.invoke(app, ["generate", "nonexistent.json", "--verbose"])
     assert result.exit_code == 1
     assert "Traceback" in result.output or "FileNotFoundError" in result.output

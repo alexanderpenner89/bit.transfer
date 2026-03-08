@@ -10,7 +10,6 @@ Dependencies:
 """
 from pathlib import Path
 
-from langfuse import observe
 from pydantic_ai import Agent, RunContext
 from pydantic_ai_skills import SkillsToolset
 
@@ -43,21 +42,35 @@ class OrchestratorAgent:
         )
         self._register_system_prompts()
 
-    @observe(name="orchestrator.generate", as_type="agent")
     async def generate(self, profil: GewerksProfilModel) -> SearchStrategyModel:
         """Generates a complete search strategy for the given profile."""
-        user_prompt = self._build_user_prompt(profil)
-        skills = SkillsToolset(directories=[str(_SKILLS_DIR)])
-        result = await self.agent.run(user_prompt, deps=profil, toolsets=[skills])
-        strategy = result.output
+        from config import get_langfuse
+        with get_langfuse().start_as_current_observation(
+            name="orchestrator.generate",
+            as_type="agent",
+            input={"gewerk_id": profil.gewerk_id, "gewerk_name": profil.gewerk_name},
+        ) as span:
+            user_prompt = self._build_user_prompt(profil)
+            skills = SkillsToolset(directories=[str(_SKILLS_DIR)])
+            result = await self.agent.run(user_prompt, deps=profil, toolsets=[skills])
+            strategy = result.output
+            usage = result.usage()
 
-        # Ensure gewerk_id matches the input profile
-        return SearchStrategyModel(
-            **{
-                **strategy.model_dump(),
-                "gewerk_id": profil.gewerk_id,
-            }
-        )
+            span.update(
+                output={"query_count": len(strategy.boolean_queries_de) + len(strategy.boolean_queries_en)},
+                usage_details={
+                    "input": usage.input_tokens or 0,
+                    "output": usage.output_tokens or 0,
+                },
+            )
+
+            # Ensure gewerk_id matches the input profile
+            return SearchStrategyModel(
+                **{
+                    **strategy.model_dump(),
+                    "gewerk_id": profil.gewerk_id,
+                }
+            )
 
     def _build_user_prompt(self, profil: GewerksProfilModel) -> str:
         """Builds user prompt with full profile context for Chain-of-Thought."""
@@ -81,7 +94,9 @@ class OrchestratorAgent:
 **Aufgabe (Chain-of-Thought):**
 
 Schritt 1 – Semantic Queries (EN):
-  Formuliere 1–2 englische Absätze (50–100 Wörter). Kein Boolean. Akademisches Vokabular.
+  Formuliere 5–10 kurze englische Phrasen (je 5–15 Wörter, KEIN vollständiger Satz, KEIN Boolean).
+  Jede Phrase = ein konkreter Aspekt des Gewerks (Werkstoff, Technik, Tragwerk, Qualitätssicherung, ...).
+  Akademisches Vokabular. Keine Füllwörter wie "involves", "represents", "encompasses".
 
 Schritt 2 – Deutsche Boolean-Queries (2–3 Stück):
   Für jede Query:
@@ -115,9 +130,11 @@ Antworte NUR mit dem strukturierten SearchStrategyModel-Output."""
 Deine Aufgabe ist es, aus Handwerks-Gewerkebeschreibungen (HWO) hochpräzise Suchstrategien für wissenschaftliche Literatur zu generieren.
 
 REGEL 1: Die semantische Suche (Semantic Queries)
-- Generiere 1-2 zusammenhängende, fließende englische Absätze.
+- Generiere 5–10 kurze englische Phrasen (je 5–15 Wörter), KEINE langen Absätze.
+- Jede Phrase deckt einen anderen Aspekt des Gewerks ab (Werkstoff, Technik, Qualität, Tragwerk, ...).
 - Nutze akademisches Vokabular (z.B. "thermal bridge mitigation" statt "preventing cold spots").
-- Nutze hier KEINE Boolean-Operatoren. Schreibe natürliche Sätze.
+- Nutze KEINE Boolean-Operatoren. Schreibe keyword-fokussierte Phrasen, keine ganzen Sätze.
+- Beispiel für Maurer: ["load-bearing masonry wall construction", "brick mortar joint mechanical properties", "reinforced concrete formwork placement", "calcium silicate block thermal performance"]
 
 REGEL 2: Die Keyword-Suche (Boolean Queries)
 Du musst die strikte OpenAlex-Syntax befolgen:

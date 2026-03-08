@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     openrouter_model: str = "anthropic/claude-3.5-sonnet"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
 
+    # OpenAlex
+    openalex_api_key: str | None = None
+    openalex_max_results: int = 25
+
+    # Concurrency
+    llm_concurrency: int = 3  # max parallel LLM calls (Ollama Cloud limit: 3)
+
     # Langfuse Tracing
     langfuse_secret_key: str | None = None
     langfuse_public_key: str | None = None
@@ -108,3 +115,15 @@ class Settings(BaseSettings):
 # Module-level singleton — reads from .env on import.
 # In tests, construct Settings(...) directly instead.
 settings = Settings()
+
+
+def get_langfuse():
+    """Return a Langfuse client configured from settings, or a disabled stub."""
+    from langfuse import Langfuse
+
+    return Langfuse(
+        public_key=settings.langfuse_public_key or "",
+        secret_key=settings.langfuse_secret_key or "",
+        host=settings.langfuse_base_url,
+        tracing_enabled=bool(settings.langfuse_enabled and settings.langfuse_public_key),
+    )
