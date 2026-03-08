@@ -225,8 +225,8 @@ def _display_dossier(dossier: DossierModel) -> None:
     console.print(f"\n[bold]Artikel ({len(dossier.articles)}):[/bold]")
     for art in dossier.articles:
         console.print(f"  • [bold]{art.title[:80]}[/bold]")
-        console.print(f"    {art.intro[:120]}...")
-        console.print(f"    Quellen: {len(art.sources)}")
+        console.print(f"  [dim]{art.intro[:120]}…[/dim]")
+        console.print(f"  [dim]HTML: {len(art.html)} Zeichen[/dim]")
 
 
 @observe(name="pipeline.publish")
