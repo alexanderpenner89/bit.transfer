@@ -17,6 +17,12 @@ from pyalex import Works
 
 from config import get_langfuse
 from schemas.research_pipeline import TopicRef, WorkResult
+from tools.openalex_costs import (
+    COST_LIST_FILTER,
+    COST_SEARCH,
+    COST_SEMANTIC_SEARCH,
+    get_tracker,
+)
 
 
 def _configure_pyalex() -> None:
@@ -127,7 +133,10 @@ async def openalex_semantic_search(
             tool.update(
                 level="ERROR",
                 output={"error": f"No results for query: {query[:50]}..."},
+                metadata={"openalex_cost_usd": COST_SEMANTIC_SEARCH, "openalex_calls": 1},
             )
+            if t := get_tracker():
+                t.add("semantic_search", 1, COST_SEMANTIC_SEARCH)
             raise ValueError(
                 f"Semantic search for '{query}' returned 0 results. "
                 "Try shorter or broader academic phrasing."
@@ -137,7 +146,9 @@ async def openalex_semantic_search(
         tool.update(output={
             "result_count": len(results),
             "top_results": [{"work_id": r.work_id, "title": r.title} for r in results[:5]],
-        })
+        }, metadata={"openalex_cost_usd": COST_SEMANTIC_SEARCH, "openalex_calls": 1})
+        if t := get_tracker():
+            t.add("semantic_search", 1, COST_SEMANTIC_SEARCH)
         return results
 
 
@@ -171,7 +182,9 @@ async def openalex_fetch_works(
         tool.update(output={
             "result_count": len(results),
             "titles": [r.title for r in results],
-        })
+        }, metadata={"openalex_cost_usd": COST_LIST_FILTER, "openalex_calls": 1})
+        if t := get_tracker():
+            t.add("list_filter", 1, COST_LIST_FILTER)
         return results
 
 
@@ -253,6 +266,8 @@ async def openalex_precision_search(
         else:
             level, status_message = "DEFAULT", None
 
+        calls = len(boolean_queries)
+        cost = calls * COST_SEARCH
         tool.update(
             output={
                 "result_count": len(merged),
@@ -263,8 +278,11 @@ async def openalex_precision_search(
                 ],
             },
             level=level,
+            metadata={"openalex_cost_usd": cost, "openalex_calls": calls},
             **({"status_message": status_message} if status_message else {}),
         )
+        if t := get_tracker():
+            t.add("search", calls, cost)
         return merged
 
 
@@ -341,15 +359,23 @@ async def openalex_get_related_works(
                         seen.add(wid)
                         results.append(_parse_work(w))
 
+        if mode == "cited_by":
+            calls = len(work_ids)
+        else:
+            calls = len(work_ids) + (1 if ref_ids else 0)
+        cost = calls * COST_LIST_FILTER
         if not results:
             tool.update(
                 output={"result_count": 0},
                 level="WARNING",
                 status_message="No related works found",
+                metadata={"openalex_cost_usd": cost, "openalex_calls": calls},
             )
         else:
             tool.update(output={
                 "result_count": len(results),
                 "titles": [r.title for r in results[:5]],
-            })
+            }, metadata={"openalex_cost_usd": cost, "openalex_calls": calls})
+        if t := get_tracker():
+            t.add("list_filter", calls, cost)
         return results
