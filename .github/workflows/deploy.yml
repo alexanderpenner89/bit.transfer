@@ -1,0 +1,29 @@
+name: Deploy to Raspberry Pi
+
+# Der Workflow startet jedes Mal, wenn du Code in den 'main' Branch pushst
+on:
+  push:
+branches: [ pi-deployment ]  # Hier den Namen des Branches eintragen
+jobs:
+  deploy:
+    # Hier wird dein registrierter Runner auf dem Pi ausgewählt
+    runs-on: self-hosted
+
+    steps:
+      # 1. Schritt: Den aktuellen Code von GitHub auf den Pi laden
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. Schritt: Docker Container bauen und starten
+      - name: Build and Restart with Docker Compose
+        run: |
+          # Wir nutzen die spezifische Pi-Konfiguration
+          # -f gibt die Datei an
+          # up -d startet die Container im Hintergrund
+          # --build erzwingt ein Neuerstellen der Images (wichtig für ARM64)
+          docker-compose -f docker-compose.pi.yml up -d --build
+
+      # 3. Schritt: Aufräumen (Optional)
+      # Löscht alte, nicht mehr verwendete Docker-Images, um Speicherplatz auf dem Pi zu sparen
+      - name: Cleanup old Docker images
+        run: docker image prune -f

@@ -1,0 +1,128 @@
+version: '3.8'
+
+# Gemeinsame Umgebungsvariablen für Langfuse (als Anker für Wiederverwendung)
+x-langfuse-env: &langfuse-env
+  DATABASE_URL: postgresql://postgres:postgres@postgres:5432/langfuse
+  NEXTAUTH_URL: http://bit.transfer:3000
+  NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-pi-secret-change-me}
+  SALT: ${SALT:-pi-salt-change-me}
+  ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_AUTH: redis
+  CLICKHOUSE_URL: http://clickhouse:8123
+  CLICKHOUSE_USER: clickhouse
+  CLICKHOUSE_PASSWORD: clickhouse
+  TELEMETRY_ENABLED: "false"
+
+services:
+
+  # ── Backend App (Deine Hauptanwendung) ──────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: bit-transfer-backend
+    restart: always
+    ports:
+      - "8000:8000"
+    env_file: .env
+    # Wir überschreiben den Dev-Befehl für den Pi-Betrieb
+    entrypoint: ["python", "main.py"]
+    command: ["--host", "0.0.0.0", "--port", "8000"]
+
+  # ── Ghost CMS (Dein Blog/Content) ──────────────────────────────────────────
+  ghost:
+    image: ghost:5-alpine
+    container_name: bit-transfer-ghost
+    restart: always
+    ports:
+      - "2368:2368"
+    environment:
+      NODE_ENV: production
+      url: http://bit.transfer/blog
+      database__client: mysql
+      database__connection__host: mysql
+      database__connection__user: root
+      database__connection__password: ${MYSQL_ROOT_PASSWORD:-ghostpass}
+      database__connection__database: ghost
+    volumes:
+      - ghost_content:/var/lib/ghost/content
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.0
+    container_name: bit-transfer-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ghostpass}
+      MYSQL_DATABASE: ghost
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-ghostpass}"]
+      interval: 10s
+      retries: 5
+
+  # ── Langfuse (Monitoring - Ressourcenintensiv!) ────────────────────────────
+  langfuse-web:
+    image: langfuse/langfuse:3.155.1
+    container_name: bit-transfer-langfuse
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      <<: *langfuse-env
+      NODE_ENV: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: bit-transfer-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: langfuse
+    volumes:
+      - langfuse-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: bit-transfer-redis
+    restart: always
+    command: redis-server --requirepass redis
+    volumes:
+      - langfuse-redis-data:/data
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: bit-transfer-clickhouse
+    restart: always
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+    volumes:
+      - langfuse-clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 10s
+      retries: 5
+
+volumes:
+  ghost_content:
+  mysql_data:
+  langfuse-postgres-data:
+  langfuse-redis-data:
+  langfuse-clickhouse-data:
