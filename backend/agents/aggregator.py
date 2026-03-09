@@ -22,6 +22,7 @@ from agents.precision_search import PrecisionSearchAgent
 from schemas.gewerksprofil import GewerksProfilModel
 from schemas.research_pipeline import ResearchResult, WorkResult
 from schemas.search_strategy import SearchStrategyModel
+from tools.openalex_costs import reset_tracker
 from tools.openalex_tools import openalex_get_related_works
 
 _TOP_N_FOR_EXPANSION = 10
@@ -65,6 +66,7 @@ class ResearchAggregator:
             as_type="agent",
             input={"gewerk_id": strategy.gewerk_id, "gewerk_name": profil.gewerk_name},
         ) as span:
+            cost_tracker = reset_tracker()
             # Stage 1: Parallel semantic search
             semantic_query_count = min(len(strategy.semantic_queries_en), self._max_queries) if self._max_queries else len(strategy.semantic_queries_en)
             self._log(f"  [dim]→ Semantische Suche: {semantic_query_count} Queries parallel...[/dim]")
@@ -197,6 +199,7 @@ class ResearchAggregator:
                     ],
                 },
                 level=level,
+                metadata={"openalex_cost_summary": cost_tracker.summary_dict()},
                 **({"status_message": status_message} if status_message else {}),
             )
 
