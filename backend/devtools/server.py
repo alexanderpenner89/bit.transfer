@@ -157,20 +157,36 @@ async def _execute_stage(stage: str, stage_input: dict[str, Any], on_progress) -
         from agents.evaluator import TopicEvaluatorAgent
         from schemas.research_pipeline import TopicCandidate
         from schemas.gewerksprofil import GewerksProfilModel
-        candidate = TopicCandidate.model_validate(stage_input["candidate"])
+        candidates = [TopicCandidate.model_validate(c) for c in stage_input["candidates"]]
         profil = GewerksProfilModel.model_validate(stage_input["profil"])
         agent = TopicEvaluatorAgent()
-        result = await agent.evaluate(candidate, profil)
-        return result.model_dump()
+        sem = asyncio.Semaphore(settings.llm_concurrency)
+
+        async def _eval_one(candidate: TopicCandidate):
+            async with sem:
+                return await agent.evaluate(candidate, profil)
+
+        results = await asyncio.gather(*[_eval_one(c) for c in candidates], return_exceptions=True)
+        return [r.model_dump() for r in results if not isinstance(r, Exception)]
 
     elif stage == "precision":
         from agents.precision_search import PrecisionSearchAgent
         from schemas.research_pipeline import TopicEvaluation
-        topic = TopicEvaluation.model_validate(stage_input["topic"])
+        topics = [TopicEvaluation.model_validate(t) for t in stage_input["topics"]]
         queries = stage_input["queries"]
         agent = PrecisionSearchAgent()
-        works = await agent.run(topic, queries)
-        return [w.model_dump() for w in works]
+        results = await asyncio.gather(*[agent.run(topic, queries) for topic in topics], return_exceptions=True)
+        seen: set[str] = set()
+        all_works = []
+        for result in results:
+            if isinstance(result, Exception):
+                continue
+            for work in result:
+                if work.work_id not in seen:
+                    seen.add(work.work_id)
+                    all_works.append(work)
+        all_works.sort(key=lambda w: w.citation_count or 0, reverse=True)
+        return [w.model_dump() for w in all_works]
 
     elif stage == "expansion":
         from tools.openalex_tools import openalex_get_related_works
@@ -410,27 +426,27 @@ def _build_stage_input_from_ctx(
             return {"strategy": ctx["strategy"]}
 
         elif stage == "evaluator":
-            # Run first topic candidate from exploration
             exploration = ctx.get("explorer", {})
             candidates = exploration.get("topic_candidates", [])
             if not candidates:
                 return None
-            # Load profile for profil context
             profil = _load_profile_by_gewerk_id(gewerk_id)
-            return {"candidate": candidates[0], "profil": profil}
+            return {"candidates": candidates, "profil": profil}
 
         elif stage == "precision":
-            exploration = ctx.get("explorer", {})
-            evaluator_out = ctx.get("evaluator", {})
+            evaluator_out = ctx.get("evaluator", [])
             strategy = ctx.get("strategy", {})
             boolean_queries = (
                 strategy.get("boolean_queries_de", []) +
                 strategy.get("boolean_queries_en", [])
             )
-            # evaluator output is a single TopicEvaluation
-            if not isinstance(evaluator_out, dict) or "topic_id" not in evaluator_out:
+            # evaluator now returns a list of TopicEvaluation dicts
+            if not isinstance(evaluator_out, list):
                 return None
-            return {"topic": evaluator_out, "queries": boolean_queries}
+            relevant_topics = [t for t in evaluator_out if t.get("is_relevant")]
+            if not relevant_topics:
+                return None
+            return {"topics": relevant_topics, "queries": boolean_queries}
 
         elif stage == "expansion":
             precision_out = ctx.get("precision", [])
