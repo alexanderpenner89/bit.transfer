@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from config import get_langfuse
 from schemas.publication_pipeline import PerspectiveResult, WorkSummary
 from schemas.research_pipeline import WorkResult
-from tools.openalex_tools import openalex_get_related_works, openalex_semantic_search
+from tools.openalex_tools import openalex_fetch_works
 
 _MAX_RELATED = 8
 
@@ -37,20 +37,19 @@ class PerspectiveSearchAgent:
     """Stage B: Finds related works for perspective enrichment (no LLM)."""
 
     async def run(self, inp: PerspectiveInput) -> PerspectiveResult:
-        """Find related works via references and semantic search."""
+        """Find related works by directly fetching the paper's references (no semantic search)."""
         with get_langfuse().start_as_current_observation(
             name="perspective_search.run",
             as_type="tool",
-            input={"work_id": inp.work_id},
+            input={"work_id": inp.work_id, "reference_count": len(inp.referenced_work_ids)},
         ) as obs:
             seen: set[str] = {inp.work_id}
             related: list[WorkSummary] = []
 
-            # Step 1: References (what does this paper cite?)
-            ref_ids = inp.referenced_work_ids[:5]
+            ref_ids = inp.referenced_work_ids[:_MAX_RELATED]
             if ref_ids:
                 try:
-                    ref_works = await openalex_get_related_works(ref_ids, mode="references")
+                    ref_works = await openalex_fetch_works(ref_ids, max_results=_MAX_RELATED)
                     for w in ref_works:
                         if w.work_id not in seen:
                             seen.add(w.work_id)
@@ -58,20 +57,13 @@ class PerspectiveSearchAgent:
                 except Exception:
                     pass
 
-            # Step 2: Semantic search for thematically similar works
-            try:
-                semantic_works = await openalex_semantic_search(inp.title, max_results=10)
-                for w in semantic_works:
-                    if w.work_id not in seen and len(related) < _MAX_RELATED:
-                        seen.add(w.work_id)
-                        related.append(_to_work_summary(w))
-            except Exception:
-                pass
-
-            # Limit to max results
-            related = related[:_MAX_RELATED]
-
-            obs.update(output={"related_count": len(related)})
+            obs.update(output={
+                "related_count": len(related),
+                "related_works": [
+                    {"work_id": w.work_id, "title": w.title, "year": w.publication_year}
+                    for w in related
+                ],
+            })
             return PerspectiveResult(
                 main_work_id=inp.work_id,
                 related_works=related,

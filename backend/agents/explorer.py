@@ -85,6 +85,10 @@ class ExplorerAgent:
                     "works_found": len(works),
                     "topics_discovered": len(topic_candidates),
                     "queries_failed": len(failed),
+                    "top_topics": [
+                        {"topic_id": t.topic_id, "name": t.display_name, "frequency": t.frequency}
+                        for t in topic_candidates[:15]
+                    ],
                 },
                 level=level,
                 **({"status_message": status_message} if status_message else {}),

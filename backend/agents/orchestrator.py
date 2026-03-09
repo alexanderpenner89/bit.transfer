@@ -59,7 +59,12 @@ class OrchestratorAgent:
                 usage = result.usage()
 
                 span.update(
-                    output={"query_count": len(strategy.boolean_queries_de) + len(strategy.boolean_queries_en)},
+                    output={
+                        "query_count": len(strategy.boolean_queries_de) + len(strategy.boolean_queries_en),
+                        "boolean_queries_de": strategy.boolean_queries_de,
+                        "boolean_queries_en": strategy.boolean_queries_en,
+                        "semantic_queries_en": strategy.semantic_queries_en,
+                    },
                     usage_details={
                         "input": usage.input_tokens or 0,
                         "output": usage.output_tokens or 0,

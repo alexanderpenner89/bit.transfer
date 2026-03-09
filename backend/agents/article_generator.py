@@ -1,7 +1,7 @@
 """ArticleGeneratorAgent — Stage C of the publication pipeline.
 
-LLM-based (pydantic-ai). Generates enriched articles for interesting publications,
-integrating perspectives and gewerk-specific insights.
+LLM-based (pydantic-ai). Generates HTML transfer dossier articles for interesting
+publications, integrating perspectives and gewerk-specific insights.
 
 Strict minimal-context principle — receives only what's needed for article generation.
 """
@@ -13,7 +13,15 @@ from pydantic import BaseModel
 from pydantic_ai import Agent
 
 from config import get_langfuse, settings
-from schemas.publication_pipeline import ArticleSource, EnrichedArticle, WorkSummary
+from schemas.publication_pipeline import EnrichedArticle, WorkSummary
+
+
+class _ArticleOutput(BaseModel):
+    """LLM output: HTML article + plain-text fields for DossierAgent."""
+    title: str
+    html: str          # Full HTML article body (800–1200 words)
+    intro: str         # 2–3 sentence plain-text intro (for excerpt + DossierAgent)
+    key_learnings: list[str]   # 3–5 concrete learnings (for DossierAgent)
 
 
 class ArticleWorkInput(BaseModel):
@@ -41,22 +49,23 @@ class ArticleDeps:
 
 
 class ArticleGeneratorAgent:
-    """Stage C: LLM-based article generation for a single publication."""
+    """Stage C: LLM-based HTML article generation for a single publication."""
 
     def __init__(self, model=None) -> None:
         if model is None:
             model = settings.build_model()
 
-        self.agent: Agent[ArticleDeps, EnrichedArticle] = Agent(
+        self.agent: Agent[ArticleDeps, _ArticleOutput] = Agent(
             model=model,
-            output_type=EnrichedArticle,
+            output_type=_ArticleOutput,
             deps_type=ArticleDeps,
             defer_model_check=True,
+            retries=2,
         )
         self._register_prompts()
 
     async def generate(self, deps: ArticleDeps) -> EnrichedArticle:
-        """Generate an enriched article for the given publication."""
+        """Generate an HTML transfer dossier article for the given publication."""
         perspective_count = len(deps.perspectives)
         with get_langfuse().start_as_current_observation(
             name="article_generator.generate",
@@ -64,8 +73,13 @@ class ArticleGeneratorAgent:
             model=settings.langfuse_model_name(),
             input={
                 "work_id": deps.work_id,
+                "title": deps.work.title,
                 "gewerk_name": deps.gewerk_context.gewerk_name,
                 "perspective_count": perspective_count,
+                "perspectives": [
+                    {"work_id": p.work_id, "title": p.title}
+                    for p in deps.perspectives
+                ],
             },
         ) as obs:
             user_prompt = self._build_user_prompt(deps)
@@ -73,25 +87,27 @@ class ArticleGeneratorAgent:
             output = result.output
             usage = result.usage()
 
+            # Validation/refinement loop (one pass)
+            output = await self._validate_and_refine(output, deps)
+
             obs.update(
-                output={"source_count": len(output.sources)},
+                output={
+                    "html_length": len(output.html),
+                    "intro": output.intro,
+                    "key_learnings": output.key_learnings,
+                },
                 usage_details={
                     "input": usage.input_tokens or 0,
                     "output": usage.output_tokens or 0,
                 },
                 level="DEFAULT",
             )
-            # Ensure work_id and title are set correctly
             return EnrichedArticle(
                 work_id=deps.work_id,
-                title=deps.work.title,
+                title=output.title,
+                html=output.html,
                 intro=output.intro,
-                core_messages=output.core_messages,
                 key_learnings=output.key_learnings,
-                gewerk_insights=output.gewerk_insights,
-                perspectives=output.perspectives,
-                conclusion=output.conclusion,
-                sources=output.sources,
             )
 
     def _build_user_prompt(self, deps: ArticleDeps) -> str:
@@ -102,6 +118,7 @@ class ArticleGeneratorAgent:
 
         abstract_text = f"\n**Abstract:** {work.abstract}" if work.abstract else ""
         doi_text = f"\n**DOI:** {work.doi}" if work.doi else ""
+        doi_link = f'<a href="https://doi.org/{work.doi.replace("https://doi.org/", "")}">{work.doi}</a>' if work.doi else ""
         year_text = f" ({work.publication_year})" if work.publication_year else ""
         citations_text = f"\n**Zitierungen:** {work.citation_count}"
 
@@ -109,14 +126,13 @@ class ArticleGeneratorAgent:
         if deps.perspectives:
             persp_lines = []
             for p in deps.perspectives[:8]:
-                abstract_short = f" — {p.abstract[:300]}..." if p.abstract else ""
                 year = f" ({p.publication_year})" if p.publication_year else ""
-                persp_lines.append(f"  • {p.title}{year}{abstract_short}")
-            perspectives_text = "\n**Verwandte Arbeiten (Perspektiven):**\n" + "\n".join(persp_lines)
+                persp_lines.append(f"  • [{p.title}{year}] (work_id: {p.work_id})")
+            perspectives_text = "\n**Verwandte Arbeiten:**\n" + "\n".join(persp_lines)
         else:
-            perspectives_text = "\n**Verwandte Arbeiten:** Keine vorhanden"
+            perspectives_text = "\n**Verwandte Arbeiten:** Keine"
 
-        return f"""Erstelle einen fundierten Fachartikel für das folgende Handwerksgewerk basierend auf einer wissenschaftlichen Publikation.
+        return f"""Erstelle ein HTML-Transfer-Dossier für das folgende Handwerksgewerk.
 
 **Hauptpublikation:**
 - Titel: {work.title}{year_text}{doi_text}{citations_text}{abstract_text}
@@ -128,32 +144,141 @@ class ArticleGeneratorAgent:
 **Forschungsfragen:**
 {questions}
 
-**Anforderungen an den Artikel:**
-1. **intro**: Kurze Einleitung (2–3 Sätze) — Was ist die Publikation, warum ist sie relevant?
-2. **core_messages**: 3–5 Kernbotschaften der Publikation als prägnante Stichpunkte
-3. **key_learnings**: 3–5 konkrete Erkenntnisse, die direkt anwendbar sind
-4. **gewerk_insights**: Was kann das Gewerk konkret mitnehmen? (1–2 Absätze)
-5. **perspectives**: Unterstützende und kritische Perspektiven aus den verwandten Arbeiten einarbeiten (1–2 Absätze)
-6. **conclusion**: Zusammenfassung und Ausblick (2–3 Sätze)
-7. **sources**: Quellenverweise für ALLE Aussagen (Hauptpublikation als "primary", verwandte als "supporting" oder "contrasting")
+**HTML-Struktur (800–1200 Wörter):**
 
-**Stil:** Sachlich, zugänglich, praxisorientiert. Keine akademischen Floskeln."""
+```html
+<article class="transfer-dossier">
+
+  <section class="auf-einen-blick">
+    <h2>Auf einen Blick</h2>
+    <ul>
+      <li><!-- 3–5 prägnante Stichpunkte --></li>
+    </ul>
+  </section>
+
+  <section class="intro">
+    <p><!-- Einleitung: Was ist die Publikation, warum relevant? 2–3 Sätze --></p>
+  </section>
+
+  <section class="findings">
+    <h2><!-- Abschnittstitel --></h2>
+    <p><!-- Inhalt mit <mark>wichtige Zahl/Statistik</mark> --></p>
+    <div class="key-insight"><!-- Kernaussage in 1–2 Sätzen --></div>
+    <div class="trl-badge">TRL <!-- 1-9 -->: <!-- Stufe Name --></div>
+  </section>
+
+  <!-- 1–2 weitere findings-Abschnitte -->
+
+  <section class="transfer-potential">
+    <h2>Transferpotenzial für {context.gewerk_name}</h2>
+    <p><!-- Wie kann das Gewerk diese Erkenntnis konkret anwenden? --></p>
+  </section>
+
+  <section class="conclusion">
+    <h2>Fazit</h2>
+    <p><!-- 2–3 Sätze Zusammenfassung und Ausblick --></p>
+  </section>
+
+  <section class="bibliography">
+    <h2>Quellen</h2>
+    <ul>
+      <li><strong>Primär:</strong> {work.title}{year_text}. {doi_link}</li>
+      <!-- weitere Quellen aus verwandten Arbeiten -->
+    </ul>
+  </section>
+
+</article>
+```
+
+**Pflichtregeln:**
+- Nur Deutsch (Ausnahme: Fachbegriffe, Eigennamen)
+- TRL-Badge in JEDEM findings-Abschnitt
+- Mindestens eine `<mark>`-Markierung pro findings-Abschnitt
+- Bibliographie mit allen zitierten Quellen und DOI-Links wo verfügbar
+- `intro`-Feld: 2–3 Sätze plain text (kein HTML) für Vorschau
+- `key_learnings`: 3–5 prägnante Stichpunkte als plain text Liste"""
+
+    async def _validate_and_refine(
+        self,
+        output: _ArticleOutput,
+        deps: ArticleDeps,
+    ) -> _ArticleOutput:
+        """Validate HTML article quality and refine once if issues found."""
+        from pydantic import BaseModel as _BaseModel
+
+        class _ValidationIssue(_BaseModel):
+            severity: str   # "critical" | "major" | "minor"
+            description: str
+
+        class _ValidationOutput(_BaseModel):
+            passed: bool
+            issues: list[_ValidationIssue]
+            refined_html: str | None = None   # Set only if passed=False and fixable
+
+        validator: Agent[None, _ValidationOutput] = Agent(
+            model=settings.build_model(),
+            output_type=_ValidationOutput,
+            retries=1,
+        )
+
+        @validator.system_prompt
+        def _val_system() -> str:
+            return (
+                "Du bist ein Qualitätsprüfer für wissenschaftliche Transfer-Dossiers.\n"
+                "Prüfe den HTML-Artikel auf:\n"
+                "- Sprache: Muss Deutsch sein (außer Fachbegriffe)\n"
+                "- Struktur: auf-einen-blick, findings mit TRL-badge, transfer-potential, conclusion, bibliography\n"
+                "- Inhalt: TRL-Einschätzung muss zur Publikation passen\n"
+                "- Transferrelevanz: Konkrete Handlungsempfehlungen für das Gewerk\n"
+                "Wenn passed=False: liefere refined_html mit den Korrekturen."
+            )
+
+        val_prompt = (
+            f"Prüfe diesen HTML-Artikel für das Gewerk '{deps.gewerk_context.gewerk_name}':\n\n"
+            f"{output.html}\n\n"
+            "Ist der Artikel korrekt? Falls nicht, liefere eine korrigierte Version in refined_html."
+        )
+
+        with get_langfuse().start_as_current_observation(
+            name="article_generator.validate",
+            as_type="generation",
+            model=settings.langfuse_model_name(),
+            input={"html_length": len(output.html), "work_id": deps.work_id},
+        ) as val_obs:
+            try:
+                val_result = await validator.run(val_prompt)
+                val_output = val_result.output
+                val_obs.update(
+                    output={
+                        "passed": val_output.passed,
+                        "issue_count": len(val_output.issues),
+                        "issues": [i.description for i in val_output.issues if i.severity in ("critical", "major")],
+                    },
+                    level="DEFAULT" if val_output.passed else "WARNING",
+                )
+                if not val_output.passed and val_output.refined_html:
+                    return _ArticleOutput(
+                        title=output.title,
+                        html=val_output.refined_html,
+                        intro=output.intro,
+                        key_learnings=output.key_learnings,
+                    )
+            except Exception:
+                val_obs.update(level="WARNING", status_message="Validation failed, using original")
+
+        return output
 
     def _register_prompts(self) -> None:
         @self.agent.system_prompt
         def system_prompt() -> str:
             return (
-                "Du bist ein erfahrener Fachjournalist für Handwerk und Bautechnik.\n"
-                "Du erstellst fundierte, praxisorientierte Fachartikel für Handwerksgewerke "
-                "auf Basis wissenschaftlicher Publikationen.\n\n"
-                "Dein Ziel:\n"
-                "- Wissenschaftliche Erkenntnisse für Praktiker zugänglich machen\n"
-                "- Konkrete Anwendungshinweise geben\n"
-                "- Verschiedene Perspektiven (unterstützend und kritisch) einarbeiten\n"
-                "- Alle Quellen korrekt zitieren\n\n"
-                "Stil: Sachlich, präzise, ohne Fachjargon wo möglich. "
-                "Schreibe für erfahrene Handwerker, nicht für Akademiker.\n\n"
-                "Setze work_id und title korrekt aus dem Kontext.\n"
-                "citation_type: 'primary' für die Hauptpublikation, "
-                "'supporting' für unterstützende, 'contrasting' für kritische Perspektiven."
+                "Du bist ein erfahrener Fachjournalist für Handwerk, Bautechnik und Technologietransfer.\n"
+                "Du erstellst HTML-Transfer-Dossiers für Handwerksgewerke auf Basis wissenschaftlicher Publikationen.\n\n"
+                "Deine Stärken:\n"
+                "- Wissenschaftliche Erkenntnisse praxisnah aufbereiten\n"
+                "- TRL-Einschätzungen (Technology Readiness Level 1–9) präzise einordnen\n"
+                "- Transferbarrieren benennen und Überwindungsstrategien nennen\n"
+                "- Statistiken und Zahlen mit <mark> hervorheben\n"
+                "- Alle Quellen mit DOI-Links korrekt zitieren\n\n"
+                "Pflicht: Nur Deutsch. Ausgabe IMMER als vollständiges HTML-Dokument gemäß Struktur."
             )

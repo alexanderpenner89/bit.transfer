@@ -41,7 +41,13 @@ class PrecisionSearchAgent:
                     publication_date=settings.openalex_precision_search_date,
                 )
                 obs.update(
-                    output={"works_found": len(works)},
+                    output={
+                        "works_found": len(works),
+                        "top_works": [
+                            {"work_id": w.work_id, "title": w.title, "citations": w.citation_count}
+                            for w in works[:5]
+                        ],
+                    },
                     level="WARNING" if not works else "DEFAULT",
                     **({"status_message": "No works found"} if not works else {}),
                 )

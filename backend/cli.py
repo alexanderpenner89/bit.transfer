@@ -225,8 +225,8 @@ def _display_dossier(dossier: DossierModel) -> None:
     console.print(f"\n[bold]Artikel ({len(dossier.articles)}):[/bold]")
     for art in dossier.articles:
         console.print(f"  • [bold]{art.title[:80]}[/bold]")
-        console.print(f"    {art.intro[:120]}...")
-        console.print(f"    Quellen: {len(art.sources)}")
+        console.print(f"  [dim]{art.intro[:120]}…[/dim]")
+        console.print(f"  [dim]HTML: {len(art.html)} Zeichen[/dim]")
 
 
 @observe(name="pipeline.publish")
@@ -284,6 +284,7 @@ def publish(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Detaillierte Fehlermeldungen"),
     lite: bool = typer.Option(False, "--lite", "-l", help="Reduzierter Lauf: max. 2 Topics, 3 Queries, 5 Works, keine Expansion"),
     incremental: bool = typer.Option(False, "--incremental", "-i", help="Überspringe bereits verarbeitete Works (Registry in data/seen_works/)"),
+    ghost: bool = typer.Option(False, "--ghost", "-g", help="Veröffentliche Artikel in Ghost CMS"),
 ) -> None:
     """Vollständige Pipeline: Profil → Research → Publikationsbewertung → Dossier."""
     try:
@@ -322,6 +323,31 @@ def publish(
 
         console.print("\n[bold green]✓ Dossier erstellt![/bold green]")
         _display_dossier(dossier)
+
+        if ghost:
+            if not settings.ghost_enabled:
+                console.print("[red]Fehler:[/red] GHOST_ADMIN_API_KEY nicht gesetzt (siehe .env)")
+                raise typer.Exit(code=1)
+            from ghost.client import GhostAdminClient
+            from ghost.publisher import publish_dossier
+
+            console.print("\n[yellow]Veröffentliche in Ghost CMS...[/yellow]")
+
+            async def _publish_to_ghost() -> None:
+                async with GhostAdminClient(
+                    api_key=settings.ghost_admin_api_key,
+                    ghost_url=settings.ghost_url,
+                ) as client:
+                    posts = await publish_dossier(
+                        dossier=dossier,
+                        ghost_client=client,
+                        author_id=settings.ghost_ai_author_id or None,
+                    )
+                for post in posts:
+                    console.print(f"  [green]✓[/green] {post.title[:60]} → {post.url}")
+                console.print(f"\n[bold green]✓ {len(posts)} Artikel veröffentlicht![/bold green]")
+
+            asyncio.run(_publish_to_ghost())
 
         if output:
             with open(output, "w", encoding="utf-8") as f:

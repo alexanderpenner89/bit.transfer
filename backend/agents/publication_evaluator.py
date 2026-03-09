@@ -78,6 +78,8 @@ class PublicationEvaluatorAgent:
                 output={
                     "is_interesting": output.is_interesting,
                     "relevance_score": output.relevance_score,
+                    "reasoning": output.reasoning,
+                    "key_insights": output.key_insights,
                 },
                 usage_details={
                     "input": usage.input_tokens or 0,

@@ -96,7 +96,11 @@ class ResearchAggregator:
                     if not isinstance(ev, Exception) and ev.is_relevant
                 ]
                 eval_span.update(
-                    output={"relevant": len(relevant_topics), "errors": eval_errors},
+                    output={
+                        "relevant": len(relevant_topics),
+                        "errors": eval_errors,
+                        "relevant_topic_names": [ev.display_name for ev in relevant_topics],
+                    },
                     **({"level": "WARNING", "status_message": f"{eval_errors} evaluation(s) failed"} if eval_errors else {"level": "DEFAULT"}),
                 )
             self._log(f"  [green]✓[/green] {len(relevant_topics)}/{n} Topics relevant")
@@ -134,7 +138,14 @@ class ResearchAggregator:
 
                 precision_works.sort(key=lambda w: w.citation_count, reverse=True)
                 ps_span.update(
-                    output={"works_found": len(precision_works), "errors": precision_errors},
+                    output={
+                        "works_found": len(precision_works),
+                        "errors": precision_errors,
+                        "top_works": [
+                            {"work_id": w.work_id, "title": w.title, "citations": w.citation_count}
+                            for w in precision_works[:10]
+                        ],
+                    },
                     **({"level": "WARNING", "status_message": f"{precision_errors} search(es) failed"} if precision_errors else {"level": "DEFAULT"}),
                 )
             self._log(f"  [green]✓[/green] {len(precision_works)} Precision Works (dedupliziert, nach Citations sortiert)")
@@ -177,8 +188,13 @@ class ResearchAggregator:
                 output={
                     "total_works": len(precision_works) + len(expanded_works),
                     "relevant_topics": len(relevant_topics),
+                    "relevant_topic_names": [ev.display_name for ev in relevant_topics],
                     "eval_errors": eval_errors,
                     "precision_errors": precision_errors,
+                    "top_precision_works": [
+                        {"work_id": w.work_id, "title": w.title, "citations": w.citation_count}
+                        for w in precision_works[:10]
+                    ],
                 },
                 level=level,
                 **({"status_message": status_message} if status_message else {}),

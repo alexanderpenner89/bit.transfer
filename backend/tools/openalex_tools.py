@@ -134,7 +134,44 @@ async def openalex_semantic_search(
             )
 
         results = [_parse_work(w) for w in raw]
-        tool.update(output={"result_count": len(results)})
+        tool.update(output={
+            "result_count": len(results),
+            "top_results": [{"work_id": r.work_id, "title": r.title} for r in results[:5]],
+        })
+        return results
+
+
+async def openalex_fetch_works(
+    work_ids: list[str],
+    max_results: int = 10,
+) -> list[WorkResult]:
+    """Fetch specific OpenAlex works by their IDs in a single batch request.
+
+    Uses the filter(openalex=...) endpoint — the cheapest possible lookup,
+    no full-text indexing, no scoring. Ideal for fetching known reference lists.
+
+    work_ids: list of short OpenAlex IDs (e.g. ['W123', 'W456'])
+    """
+    ids = work_ids[:max_results]
+    if not ids:
+        return []
+
+    with get_langfuse().start_as_current_observation(
+        name="openalex.fetch_works",
+        as_type="tool",
+        input={"work_ids": ids, "count": len(ids)},
+    ) as tool:
+        def _fetch() -> list[dict]:
+            return Works().filter(openalex="|".join(ids)).get(per_page=len(ids))
+
+        async with _get_sem():
+            raw = await asyncio.to_thread(_fetch)
+
+        results = [_parse_work(w) for w in raw]
+        tool.update(output={
+            "result_count": len(results),
+            "titles": [r.title for r in results],
+        })
         return results
 
 
@@ -217,7 +254,14 @@ async def openalex_precision_search(
             level, status_message = "DEFAULT", None
 
         tool.update(
-            output={"result_count": len(merged), "queries_failed": len(failed_queries)},
+            output={
+                "result_count": len(merged),
+                "queries_failed": len(failed_queries),
+                "top_results": [
+                    {"work_id": w.work_id, "title": w.title, "citations": w.citation_count}
+                    for w in merged[:5]
+                ],
+            },
             level=level,
             **({"status_message": status_message} if status_message else {}),
         )
@@ -304,5 +348,8 @@ async def openalex_get_related_works(
                 status_message="No related works found",
             )
         else:
-            tool.update(output={"result_count": len(results)})
+            tool.update(output={
+                "result_count": len(results),
+                "titles": [r.title for r in results[:5]],
+            })
         return results
