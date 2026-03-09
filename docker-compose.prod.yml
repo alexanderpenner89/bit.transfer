@@ -8,6 +8,7 @@ services:
       - "80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /root/.htpasswd.devtools:/etc/nginx/.htpasswd:ro
     depends_on:
       - devtools
       - ghost

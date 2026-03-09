@@ -18,12 +18,7 @@ if TYPE_CHECKING:
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from langfuse import get_client
-from pydantic_ai.agent import Agent
 
-langfuse = get_client()
-# Das schaltet die automatische Aufzeichnung aller Pydantic AI Agents ein!
-Agent.instrument_all()
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -151,17 +146,25 @@ class Settings(BaseSettings):
 # In tests, construct Settings(...) directly instead.
 settings = Settings()
 
+# Initialize the Langfuse singleton AFTER settings are loaded so that pydantic-ai's
+# Agent.instrument_all() uses the same properly-configured client as our manual spans.
+# If Langfuse is initialized before settings (as get_client() was before), pydantic-ai
+# creates separate root-level traces instead of nesting under the pipeline batch spans.
+from langfuse import Langfuse as _Langfuse
+from pydantic_ai.agent import Agent as _Agent
 
-def get_langfuse():
-    """Return a Langfuse client configured from settings, or a disabled stub."""
-    from langfuse import Langfuse
+langfuse = _Langfuse(
+    public_key=settings.langfuse_public_key or "",
+    secret_key=settings.langfuse_secret_key or "",
+    host=settings.langfuse_base_url,
+    tracing_enabled=bool(settings.langfuse_enabled and settings.langfuse_public_key),
+)
+_Agent.instrument_all()
 
-    return Langfuse(
-        public_key=settings.langfuse_public_key or "",
-        secret_key=settings.langfuse_secret_key or "",
-        host=settings.langfuse_base_url,
-        tracing_enabled=bool(settings.langfuse_enabled and settings.langfuse_public_key),
-    )
+
+def get_langfuse() -> _Langfuse:
+    """Return the shared Langfuse singleton (same instance used by pydantic-ai)."""
+    return langfuse
 
 
 def fetch_prompt(name: str, cache_ttl_seconds: int = 300):
@@ -169,6 +172,6 @@ def fetch_prompt(name: str, cache_ttl_seconds: int = 300):
     if not (settings.langfuse_enabled and settings.langfuse_public_key):
         return None
     try:
-        return get_langfuse().get_prompt(name, cache_ttl_seconds=cache_ttl_seconds)
+        return langfuse.get_prompt(name, cache_ttl_seconds=cache_ttl_seconds)
     except Exception:
         return None

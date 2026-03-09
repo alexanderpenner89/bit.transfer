@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -36,6 +37,13 @@ from devtools import run_store
 from devtools import langfuse_bridge
 
 app = FastAPI(title="bit.transfer DevTools")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://alexanderpenner.de"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["*"],
+)
 
 _STATIC_DIR = Path(__file__).parent / "static"
 _PROFILES_DIR = Path("/app/data/profiles")
@@ -613,9 +621,14 @@ async def list_fixtures():
 
 @app.get("/api/fixtures/{filename}")
 async def get_fixture(filename: str):
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
     path = _PROFILES_DIR / filename
     if not path.exists() or not path.is_file():
         raise HTTPException(status_code=404, detail="Fixture not found")
+    # Ensure resolved path stays within profiles directory
+    if not path.resolve().is_relative_to(_PROFILES_DIR.resolve()):
+        raise HTTPException(status_code=400, detail="Invalid filename")
     return JSONResponse(json.loads(path.read_text()))
 
 

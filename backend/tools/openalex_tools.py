@@ -64,6 +64,25 @@ def _strip_proximity(query: str) -> str:
     return _PROXIMITY_RE.sub('', query)
 
 
+def _reconstruct_abstract(inverted_index: dict) -> str | None:
+    """Reconstruct plain-text abstract from OpenAlex abstract_inverted_index format.
+
+    The inverted index maps each word to a list of its positions in the abstract.
+    E.g. {"The": [0], "method": [1, 5], ...}
+    """
+    if not inverted_index:
+        return None
+    try:
+        max_pos = max(pos for positions in inverted_index.values() for pos in positions)
+        words = [""] * (max_pos + 1)
+        for word, positions in inverted_index.items():
+            for pos in positions:
+                words[pos] = word
+        return " ".join(words) or None
+    except Exception:
+        return None
+
+
 def _parse_work(work: dict) -> WorkResult:
     """Parse a raw pyalex work dict into a WorkResult."""
     topics = []
@@ -88,6 +107,8 @@ def _parse_work(work: dict) -> WorkResult:
     short_work_id = work_id.split("/")[-1] if "/" in work_id else work_id
 
     abstract = work.get("abstract") or None
+    if not abstract:
+        abstract = _reconstruct_abstract(work.get("abstract_inverted_index"))
 
     doi = work.get("doi") or None
 
