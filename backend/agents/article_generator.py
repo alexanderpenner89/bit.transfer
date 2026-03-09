@@ -84,13 +84,34 @@ class ArticleGeneratorAgent:
             },
         ) as obs:
             user_prompt = self._build_user_prompt(deps)
+
+            # Initial generation
             result = await self.agent.run(user_prompt, deps=deps)
             output = result.output
+
+            # Feedback loop: up to 2 retries
+            max_retries = 2
+            for _attempt in range(max_retries):
+                val_output = await self._validate(output, deps)
+                if val_output.passed:
+                    break
+
+                issues_text = "\n".join(
+                    f"- [{i.severity}] {i.description}" for i in val_output.issues
+                )
+                feedback_prompt = (
+                    "Dein Artikel hat die Qualitätsprüfung nicht bestanden. "
+                    "Bitte überarbeite ihn vollständig und behebe folgende Probleme:\n"
+                    f"{issues_text}"
+                )
+                result = await self.agent.run(
+                    feedback_prompt,
+                    message_history=result.all_messages(),
+                    deps=deps,
+                )
+                output = result.output
+
             usage = result.usage()
-
-            # Validation/refinement loop (one pass)
-            output = await self._validate_and_refine(output, deps)
-
             obs.update(
                 output={
                     "html_length": len(output.html),
