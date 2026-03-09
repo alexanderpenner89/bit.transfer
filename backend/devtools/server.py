@@ -26,7 +26,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -42,6 +42,9 @@ _PROFILES_DIR = Path("/app/data/profiles")
 
 # Per-run SSE queues
 _run_queues: dict[str, asyncio.Queue] = {}
+
+# Per-run active asyncio tasks (for cancellation)
+_run_tasks: dict[str, asyncio.Task] = {}
 
 STAGE_DEPENDENCIES: dict[str, list[str]] = {
     "strategy": [],
@@ -81,6 +84,14 @@ def _get_queue(run_id: str) -> asyncio.Queue:
 async def _push(run_id: str, event: str, data: Any) -> None:
     q = _get_queue(run_id)
     await q.put({"event": event, "data": data})
+
+
+def _register_task(run_id: str, coro) -> asyncio.Task:
+    """Create and register an asyncio Task for a pipeline run."""
+    task = asyncio.create_task(coro)
+    _run_tasks[run_id] = task
+    task.add_done_callback(lambda _: _run_tasks.pop(run_id, None))
+    return task
 
 
 def _check_deps(run: dict[str, Any], stage: str) -> None:
@@ -257,27 +268,30 @@ async def _run_pipeline_stages(run_id: str, stages: list[str], *, final_event: b
         if run["stages"][s]["status"] == "completed" and run["stages"][s]["output"]:
             ctx[s] = run["stages"][s]["output"]
 
-    with propagate_attributes(session_id=run_id, user_id=run["gewerk_id"]):
-        for stage in stages:
-            stage_input = _build_stage_input_from_ctx(stage, run, ctx)
-            if stage_input is None:
-                await _push(run_id, "stage_failed", {
-                    "stage": stage,
-                    "error": "Cannot build input — missing upstream outputs",
-                })
-                await run_store.update_stage(run_id, stage, {
-                    "status": "failed",
-                    "completed_at": _now(),
-                    "error": "Missing upstream outputs",
-                })
-                break
-            await _run_stage(run_id, stage, stage_input)
-            # Refresh run and update ctx after stage completes
-            run = await run_store.get_run(run_id)
-            if run["stages"][stage]["status"] != "completed":
-                break
-            if run["stages"][stage]["output"]:
-                ctx[stage] = run["stages"][stage]["output"]
+    try:
+        with propagate_attributes(session_id=run_id, user_id=run["gewerk_id"]):
+            for stage in stages:
+                stage_input = _build_stage_input_from_ctx(stage, run, ctx)
+                if stage_input is None:
+                    await _push(run_id, "stage_failed", {
+                        "stage": stage,
+                        "error": "Cannot build input — missing upstream outputs",
+                    })
+                    await run_store.update_stage(run_id, stage, {
+                        "status": "failed",
+                        "completed_at": _now(),
+                        "error": "Missing upstream outputs",
+                    })
+                    break
+                await _run_stage(run_id, stage, stage_input)
+                # Refresh run and update ctx after stage completes
+                run = await run_store.get_run(run_id)
+                if run["stages"][stage]["status"] != "completed":
+                    break
+                if run["stages"][stage]["output"]:
+                    ctx[stage] = run["stages"][stage]["output"]
+    except asyncio.CancelledError:
+        raise
 
     if final_event:
         await _push(run_id, "run_completed", {"run_id": run_id})
@@ -394,6 +408,8 @@ async def _run_full_publication_pipeline(run_id: str) -> None:
             for post in posts:
                 await _push(run_id, "progress", {"stage": "dossier", "message": f"Published: {post.title} → {post.url}"})
 
+    except asyncio.CancelledError:
+        raise
     except Exception as exc:
         error_msg = f"{type(exc).__name__}: {exc}"
         for stage in PUBLICATION_STAGES:
@@ -626,38 +642,38 @@ async def create_run(body: CreateRunRequest):
 # Pipeline endpoints
 
 @app.post("/api/runs/{run_id}/pipeline/research")
-async def run_research_pipeline(run_id: str, background_tasks: BackgroundTasks):
+async def run_research_pipeline(run_id: str):
     run = await run_store.get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
-    background_tasks.add_task(_run_pipeline_stages, run_id, RESEARCH_STAGES)
+    _register_task(run_id, _run_pipeline_stages(run_id, RESEARCH_STAGES))
     return {"accepted": True}
 
 
 @app.post("/api/runs/{run_id}/pipeline/publication")
-async def run_publication_pipeline(run_id: str, background_tasks: BackgroundTasks):
+async def run_publication_pipeline(run_id: str):
     run = await run_store.get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
-    background_tasks.add_task(_run_full_publication_pipeline, run_id)
+    _register_task(run_id, _run_full_publication_pipeline(run_id))
     return {"accepted": True}
 
 
+async def _run_all_stages(run_id: str) -> None:
+    await _run_pipeline_stages(run_id, RESEARCH_STAGES, final_event=False)
+    run_after = await run_store.get_run(run_id)
+    if run_after and run_after["stages"]["expansion"]["status"] == "completed":
+        await _run_full_publication_pipeline(run_id)
+    else:
+        await _push(run_id, "run_completed", {"run_id": run_id})
+
+
 @app.post("/api/runs/{run_id}/pipeline/full")
-async def run_full_pipeline(run_id: str, background_tasks: BackgroundTasks):
+async def run_full_pipeline(run_id: str):
     run = await run_store.get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
-
-    async def _run_all() -> None:
-        await _run_pipeline_stages(run_id, RESEARCH_STAGES, final_event=False)
-        run_after = await run_store.get_run(run_id)
-        if run_after and run_after["stages"]["expansion"]["status"] == "completed":
-            await _run_full_publication_pipeline(run_id)
-        else:
-            await _push(run_id, "run_completed", {"run_id": run_id})
-
-    background_tasks.add_task(_run_all)
+    _register_task(run_id, _run_all_stages(run_id))
     return {"accepted": True}
 
 
@@ -668,7 +684,7 @@ class StageRequest(BaseModel):
 
 
 @app.post("/api/runs/{run_id}/stages/{stage}")
-async def run_stage(run_id: str, stage: str, body: StageRequest, background_tasks: BackgroundTasks):
+async def run_stage(run_id: str, stage: str, body: StageRequest):
     if stage not in STAGE_DEPENDENCIES:
         raise HTTPException(status_code=404, detail=f"Unknown stage: {stage}")
     run = await run_store.get_run(run_id)
@@ -676,8 +692,29 @@ async def run_stage(run_id: str, stage: str, body: StageRequest, background_task
         raise HTTPException(status_code=404, detail="Run not found")
     _check_deps(run, stage)
     stage_input = body.model_dump()
-    background_tasks.add_task(_run_stage, run_id, stage, stage_input)
+    _register_task(run_id, _run_stage(run_id, stage, stage_input))
     return {"accepted": True}
+
+
+@app.post("/api/runs/{run_id}/cancel")
+async def cancel_run(run_id: str):
+    run = await run_store.get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    # Cancel running task if any
+    task = _run_tasks.get(run_id)
+    if task and not task.done():
+        task.cancel()
+        try:
+            await asyncio.wait_for(asyncio.shield(task), timeout=2.0)
+        except (asyncio.CancelledError, asyncio.TimeoutError):
+            pass
+
+    # Mark remaining running stages as cancelled
+    cancelled = await run_store.cancel_running_stages(run_id)
+    await _push(run_id, "run_cancelled", {"run_id": run_id, "stages": cancelled})
+    return {"cancelled": True, "stages": cancelled}
 
 
 # SSE stream
