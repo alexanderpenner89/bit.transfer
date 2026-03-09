@@ -14,18 +14,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. Schritt: .env Datei aus GitHub Secret erstellen
-      - name: Create .env file
-        run: echo "${{ secrets.ENV_FILE }}" > .env
-
-      # 3. Schritt: Docker Container bauen und starten
+      # 2. Schritt: Docker Container bauen und starten
       - name: Build and Restart with Docker Compose
         run: |
           # Wir nutzen die spezifische Pi-Konfiguration
           # -f gibt die Datei an
           # up -d startet die Container im Hintergrund
           # --build erzwingt ein Neuerstellen der Images (wichtig für ARM64)
-          docker-compose -f docker-compose.pi.yml up -d --build
+          docker-compose -f docker-compose.pi.yml up -d --build --remove-orphans
 
       # 4. Schritt: Aufräumen (Optional)
       # Löscht alte, nicht mehr verwendete Docker-Images, um Speicherplatz auf dem Pi zu sparen
