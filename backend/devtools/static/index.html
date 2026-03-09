@@ -25,6 +25,8 @@
   --green-bg:      rgba(26,122,62,0.08);
   --red:           #c0392b;
   --red-bg:        rgba(192,57,43,0.08);
+  --amber:         #b07d00;
+  --amber-bg:      rgba(176,125,0,0.08);
   --radius:        4px;
   --font-sans:     'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-serif:    'Playfair Display', Georgia, serif;
@@ -65,6 +67,7 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:
 .rdot.completed{background:var(--green)}
 .rdot.running{background:var(--blue);animation:pulse 1s infinite}
 .rdot.failed{background:var(--red)}
+.rdot.cancelled{background:var(--amber)}
 .rdot.not_run{background:var(--border-hi)}
 .run-del{font-size:14px;color:var(--muted);padding:2px;cursor:pointer;flex-shrink:0;line-height:1}
 .run-del:hover{color:var(--red)}
@@ -113,6 +116,7 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:
 .sc.running{border-color:rgba(29,111,184,0.5);border-left:3px solid var(--blue)}
 .sc.completed{border-color:rgba(26,122,62,0.4);border-left:3px solid var(--green)}
 .sc.failed{border-color:rgba(192,57,43,0.4);border-left:3px solid var(--red)}
+.sc.cancelled{border-color:rgba(140,100,0,0.4);border-left:3px solid var(--amber)}
 .sc-head{display:flex;align-items:center;padding:10px 14px;gap:10px}
 .sc-icon{width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
 .sc-name{font-size:12px;font-weight:600;flex:1;color:var(--text)}
@@ -411,10 +415,13 @@ function startSSE(runId) {
       case 'run_completed':
         api(`/api/runs/${runId}`).then(r => { state.run = r; renderMain(); }).catch(()=>{});
         break;
+      case 'run_cancelled':
+        api(`/api/runs/${runId}`).then(r => { state.run = r; renderMain(); }).catch(()=>{});
+        break;
     }
   }
 
-  const events = ['stage_started','progress','stage_completed','stage_failed','run_completed'];
+  const events = ['stage_started','progress','stage_completed','stage_failed','run_completed','run_cancelled'];
   events.forEach(name => {
     es.addEventListener(name, e => {
       try { handle(name, JSON.parse(e.data)); } catch(err) { console.error(err); }
@@ -432,6 +439,11 @@ function renderProgressLog(stage) {
 }
 
 // ── Pipeline run ─────────────────────────────────────────────────────────────
+function isRunning(run) {
+  if (!run) return false;
+  return Object.values(run.stages).some(s => s.status === 'running');
+}
+
 async function runPipeline(type) {
   const runId = state.selectedRunId;
   if (!runId) return;
@@ -439,6 +451,16 @@ async function runPipeline(type) {
     await api(`/api/runs/${runId}/pipeline/${type}`, {method:'POST'});
   } catch(e) {
     alert('Failed: ' + e.message);
+  }
+}
+
+async function cancelRun() {
+  const runId = state.selectedRunId;
+  if (!runId) return;
+  try {
+    await api(`/api/runs/${runId}/cancel`, {method: 'POST'});
+  } catch(e) {
+    alert('Cancel failed: ' + e.message);
   }
 }
 
@@ -690,6 +712,7 @@ function renderMain() {
       <div class="run-hdr-id">${esc(run.run_id)}</div>
       <div class="run-hdr-meta">${esc(run.gewerk_name||run.gewerk_id)} · ${date}</div>
       <div class="run-hdr-acts">
+        ${isRunning(run) ? `<button class="btn btn-red" onclick="cancelRun()">⬛ Cancel</button>` : ''}
         <button class="btn btn-ghost" onclick="refreshRun()">↻ Refresh</button>
       </div>
     </div>
@@ -769,14 +792,19 @@ function renderOutput(stage, output) {
         stat('Topic candidates', output.topic_candidates?.length||0),
       ];
       break;
-    case 'evaluator':
+    case 'evaluator': {
+      const evals = Array.isArray(output) ? output : [output];
+      const relevant = evals.filter(e => e.is_relevant);
       stats = [
-        stat('Topic', output.display_name||output.topic_id||'—'),
-        stat('Relevant', output.is_relevant ? '✓ yes' : '✗ no'),
-        stat('Confidence', ((output.confidence||0)*100).toFixed(0)+'%'),
+        stat('Evaluated', evals.length),
+        stat('Relevant', relevant.length),
+        stat('Avg confidence', evals.length
+          ? ((evals.reduce((s,e)=>s+(e.confidence||0),0)/evals.length)*100).toFixed(0)+'%'
+          : '—'),
       ];
-      if (output.reasoning) preview = output.reasoning;
+      if (relevant[0]?.display_name) preview = relevant.map(e=>e.display_name).join(', ');
       break;
+    }
     case 'precision':
       stats = [stat('Precision works', Array.isArray(output)?output.length:0)];
       break;
@@ -823,6 +851,7 @@ function statusIcon(s) {
     case 'completed': return '<span style="color:var(--green);font-size:14px">✓</span>';
     case 'running':   return '<span class="spin"></span>';
     case 'failed':    return '<span style="color:var(--red);font-size:14px">✕</span>';
+    case 'cancelled': return '<span style="color:var(--amber)">⊘</span>';
     default:          return '<span style="color:var(--border-hi);font-size:14px">○</span>';
   }
 }
@@ -832,6 +861,7 @@ function badgeStyle(s) {
     case 'completed': return 'background:var(--green-bg);color:var(--green);border:1px solid rgba(26,122,62,0.25)';
     case 'running':   return 'background:var(--blue-bg);color:var(--blue);border:1px solid rgba(29,111,184,0.25)';
     case 'failed':    return 'background:var(--red-bg);color:var(--red);border:1px solid rgba(192,57,43,0.25)';
+    case 'cancelled': return 'background:var(--amber-bg);color:var(--amber)';
     default:          return 'background:rgba(0,0,0,0.05);color:var(--muted);border:1px solid var(--border)';
   }
 }
