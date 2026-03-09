@@ -111,7 +111,8 @@ services:
     restart: always
 
   clickhouse:
-    image: clickhouse/clickhouse-server:latest
+    image: clickhouse/clickhouse-server:24.8-alpine
+    platform: linux/arm64
     container_name: bit-transfer-clickhouse
     environment:
       CLICKHOUSE_DB: default
