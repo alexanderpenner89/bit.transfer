@@ -306,6 +306,7 @@ async def openalex_get_related_works(
     ) as tool:
         seen: set[str] = set()
         results: list[WorkResult] = []
+        ref_ids: list[str] = []
 
         if mode == "cited_by":
             def _fetch_cited_by(wid: str) -> list[dict]:
