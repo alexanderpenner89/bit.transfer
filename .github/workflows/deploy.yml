@@ -3,8 +3,7 @@ name: Deploy to Raspberry Pi
 # Der Workflow startet jedes Mal, wenn du Code in den 'main' Branch pushst
 on:
   push:
-    branches: [ main ]
-
+branches: [ pi-deployment ]  # Hier den Namen des Branches eintragen
 jobs:
   deploy:
     # Hier wird dein registrierter Runner auf dem Pi ausgewählt
