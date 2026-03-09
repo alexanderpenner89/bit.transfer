@@ -1,17 +1,3 @@
-x-langfuse-env: &langfuse-env
-  DATABASE_URL: postgresql://postgres:postgres@postgres:5432/langfuse
-  NEXTAUTH_URL: http://bit.transfer:3000
-  NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-pi-secret-change-me}
-  SALT: ${SALT:-pi-salt-change-me}
-  ENCRYPTION_KEY: "0000000000000000000000000000000000000000000000000000000000000000"
-  REDIS_HOST: redis
-  REDIS_PORT: "6379"
-  REDIS_AUTH: redis
-  CLICKHOUSE_URL: http://clickhouse:8123
-  CLICKHOUSE_USER: clickhouse
-  CLICKHOUSE_PASSWORD: clickhouse
-  TELEMETRY_ENABLED: "false"
-
 services:
 
   # ── DevTools / Backend ────────────────────────────────────────────────────────
@@ -23,8 +9,6 @@ services:
     ports:
       - "8000:8000"
     env_file: .env
-    environment:
-      LANGFUSE_BASE_URL: http://langfuse-web:3000
     volumes:
       - devtools_runs:/app/data/dev_runs
     restart: always
@@ -68,69 +52,7 @@ services:
       retries: 10
     restart: always
 
-  # ── Langfuse (Monitoring) ─────────────────────────────────────────────────────
-  langfuse-web:
-    image: langfuse/langfuse:3.155.1
-    container_name: bit-transfer-langfuse
-    ports:
-      - "3000:3000"
-    environment:
-      <<: *langfuse-env
-      NODE_ENV: production
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      clickhouse:
-        condition: service_healthy
-    restart: always
-
-  postgres:
-    image: postgres:16-alpine
-    container_name: bit-transfer-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: langfuse
-    volumes:
-      - langfuse-postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: always
-
-  redis:
-    image: redis:7-alpine
-    container_name: bit-transfer-redis
-    command: redis-server --requirepass redis
-    volumes:
-      - langfuse-redis-data:/data
-    restart: always
-
-  clickhouse:
-    image: clickhouse/clickhouse-server:24.8-alpine
-    platform: linux/arm64
-    container_name: bit-transfer-clickhouse
-    environment:
-      CLICKHOUSE_DB: default
-      CLICKHOUSE_USER: clickhouse
-      CLICKHOUSE_PASSWORD: clickhouse
-    volumes:
-      - langfuse-clickhouse-data:/var/lib/clickhouse
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: always
-
 volumes:
   devtools_runs:
   ghost_content:
   mysql_data:
-  langfuse-postgres-data:
-  langfuse-redis-data:
-  langfuse-clickhouse-data:
