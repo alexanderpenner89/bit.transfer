@@ -135,7 +135,7 @@ def test_validate_does_not_return_refined_html():
     fake_output.html = "<article>test</article>"
 
     fake_val_result = MagicMock()
-    val_out = MagicMock()
+    val_out = MagicMock(spec=["passed", "issues"])  # no refined_html in spec
     val_out.passed = False
     val_out.issues = [MagicMock(severity="major", description="Problem")]
     fake_val_result.output = val_out

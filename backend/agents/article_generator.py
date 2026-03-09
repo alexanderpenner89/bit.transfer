@@ -8,6 +8,7 @@ Strict minimal-context principle — receives only what's needed for article gen
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from pydantic import BaseModel
 from pydantic_ai import Agent
@@ -198,12 +199,12 @@ class ArticleGeneratorAgent:
 - `intro`-Feld: 2–3 Sätze plain text (kein HTML) für Vorschau
 - `key_learnings`: 3–5 prägnante Stichpunkte als plain text Liste"""
 
-    async def _validate_and_refine(
+    async def _validate(
         self,
         output: _ArticleOutput,
         deps: ArticleDeps,
-    ) -> _ArticleOutput:
-        """Validate HTML article quality and refine once if issues found."""
+    ) -> Any:
+        """Validate HTML article quality. Returns validation result (passed + issues only)."""
         from pydantic import BaseModel as _BaseModel
 
         class _ValidationIssue(_BaseModel):
@@ -213,7 +214,7 @@ class ArticleGeneratorAgent:
         class _ValidationOutput(_BaseModel):
             passed: bool
             issues: list[_ValidationIssue]
-            refined_html: str | None = None   # Set only if passed=False and fixable
+            # refined_html intentionally removed — generator fixes its own output
 
         validator: Agent[None, _ValidationOutput] = Agent(
             model=settings.build_model(),
@@ -230,13 +231,13 @@ class ArticleGeneratorAgent:
                 "- Struktur: auf-einen-blick, findings mit TRL-badge, transfer-potential, conclusion, bibliography\n"
                 "- Inhalt: TRL-Einschätzung muss zur Publikation passen\n"
                 "- Transferrelevanz: Konkrete Handlungsempfehlungen für das Gewerk\n"
-                "Wenn passed=False: liefere refined_html mit den Korrekturen."
+                "Gib nur passed und issues zurück. Generiere KEIN eigenes HTML."
             )
 
         val_prompt = (
             f"Prüfe diesen HTML-Artikel für das Gewerk '{deps.gewerk_context.gewerk_name}':\n\n"
             f"{output.html}\n\n"
-            "Ist der Artikel korrekt? Falls nicht, liefere eine korrigierte Version in refined_html."
+            "Ist der Artikel korrekt? Liste alle Probleme in issues."
         )
 
         with get_langfuse().start_as_current_observation(
@@ -252,21 +253,15 @@ class ArticleGeneratorAgent:
                     output={
                         "passed": val_output.passed,
                         "issue_count": len(val_output.issues),
-                        "issues": [i.description for i in val_output.issues if i.severity in ("critical", "major")],
+                        "issues": [f"[{i.severity}] {i.description}" for i in val_output.issues],
                     },
                     level="DEFAULT" if val_output.passed else "WARNING",
                 )
-                if not val_output.passed and val_output.refined_html:
-                    return _ArticleOutput(
-                        title=output.title,
-                        html=val_output.refined_html,
-                        intro=output.intro,
-                        key_learnings=output.key_learnings,
-                    )
+                return val_output
             except Exception:
-                val_obs.update(level="WARNING", status_message="Validation failed, using original")
-
-        return output
+                val_obs.update(level="WARNING", status_message="Validation failed, skipping")
+                # Return a passing result so generate() continues without crashing
+                return _ValidationOutput(passed=True, issues=[])
 
     def _register_prompts(self) -> None:
         @self.agent.system_prompt
