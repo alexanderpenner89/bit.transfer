@@ -18,7 +18,12 @@ if TYPE_CHECKING:
 
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from langfuse import get_client
+from pydantic_ai.agent import Agent
 
+langfuse = get_client()
+# Das schaltet die automatische Aufzeichnung aller Pydantic AI Agents ein!
+Agent.instrument_all()
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
