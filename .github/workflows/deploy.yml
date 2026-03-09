@@ -14,7 +14,11 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. Schritt: Docker Container bauen und starten
+      # 2. Schritt: .env aus persistentem Pfad einkopieren
+      - name: Restore .env file
+        run: cp /home/alex/.env.bit-transfer .env
+
+      # 3. Schritt: Docker Container bauen und starten
       - name: Build and Restart with Docker Compose
         run: |
           # Wir nutzen die spezifische Pi-Konfiguration
