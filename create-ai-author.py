@@ -24,15 +24,15 @@ from pathlib import Path
 
 # ── Author identity ───────────────────────────────────────────────────────────
 
-AI_NAME     = "Meridian"
-AI_SLUG     = "meridian"
-AI_EMAIL    = "meridian@bit-transfer.local"
+AI_NAME     = "Synthesis AI"
+AI_SLUG     = "synthesis-ai"
+AI_EMAIL    = "synthesis-ai@bit-transfer.local"
 AI_BIO      = (
     "KI-gestützter Wissenschaftsredakteur. "
     "Analysiert aktuelle Forschungspublikationen und überträgt sie "
     "in praxisnahe Erkenntnisse für das Handwerk."
 )
-AI_PASSWORD = "Meridian_BitTransfer_2026!"   # stored in DB; never used for login
+AI_PASSWORD = "Synthesis_AI_BitTransfer_2026!"   # stored in DB; never used for login
 
 # ── Load .env ─────────────────────────────────────────────────────────────────
 
