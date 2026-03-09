@@ -257,6 +257,7 @@ async def _execute_stage(stage: str, stage_input: dict[str, Any], on_progress) -
 async def _run_pipeline_stages(run_id: str, stages: list[str], *, final_event: bool = True) -> None:
     """Run a sequence of stages, loading inputs from prior stage outputs."""
     from langfuse import propagate_attributes
+    from config import get_langfuse
 
     run = await run_store.get_run(run_id)
     if not run:
@@ -268,28 +269,35 @@ async def _run_pipeline_stages(run_id: str, stages: list[str], *, final_event: b
         if run["stages"][s]["status"] == "completed" and run["stages"][s]["output"]:
             ctx[s] = run["stages"][s]["output"]
 
+    span_name = "research-pipeline" if set(stages) <= {"strategy","explorer","evaluator","precision","expansion"} else "pipeline-stages"
+
     try:
         with propagate_attributes(session_id=run_id, user_id=run["gewerk_id"]):
-            for stage in stages:
-                stage_input = _build_stage_input_from_ctx(stage, run, ctx)
-                if stage_input is None:
-                    await _push(run_id, "stage_failed", {
-                        "stage": stage,
-                        "error": "Cannot build input — missing upstream outputs",
-                    })
-                    await run_store.update_stage(run_id, stage, {
-                        "status": "failed",
-                        "completed_at": _now(),
-                        "error": "Missing upstream outputs",
-                    })
-                    break
-                await _run_stage(run_id, stage, stage_input)
-                # Refresh run and update ctx after stage completes
-                run = await run_store.get_run(run_id)
-                if run["stages"][stage]["status"] != "completed":
-                    break
-                if run["stages"][stage]["output"]:
-                    ctx[stage] = run["stages"][stage]["output"]
+            with get_langfuse().start_as_current_observation(
+                name=span_name,
+                as_type="span",
+                input={"run_id": run_id, "gewerk_id": run["gewerk_id"], "stages": stages},
+            ):
+                for stage in stages:
+                    stage_input = _build_stage_input_from_ctx(stage, run, ctx)
+                    if stage_input is None:
+                        await _push(run_id, "stage_failed", {
+                            "stage": stage,
+                            "error": "Cannot build input — missing upstream outputs",
+                        })
+                        await run_store.update_stage(run_id, stage, {
+                            "status": "failed",
+                            "completed_at": _now(),
+                            "error": "Missing upstream outputs",
+                        })
+                        break
+                    await _run_stage(run_id, stage, stage_input)
+                    # Refresh run and update ctx after stage completes
+                    run = await run_store.get_run(run_id)
+                    if run["stages"][stage]["status"] != "completed":
+                        break
+                    if run["stages"][stage]["output"]:
+                        ctx[stage] = run["stages"][stage]["output"]
     except asyncio.CancelledError:
         raise
 
@@ -300,6 +308,7 @@ async def _run_pipeline_stages(run_id: str, stages: list[str], *, final_event: b
 async def _run_full_publication_pipeline(run_id: str) -> None:
     """Run all publication stages using PublicationPipeline (processes ALL works in parallel)."""
     from langfuse import propagate_attributes
+    from config import get_langfuse
 
     run = await run_store.get_run(run_id)
     if not run:
@@ -380,8 +389,18 @@ async def _run_full_publication_pipeline(run_id: str) -> None:
             )
 
         with propagate_attributes(session_id=run_id, user_id=gewerk_id):
-            pipeline = PublicationPipeline(on_progress=on_progress)
-            dossier = await pipeline.run(research_result, research_questions, gewerk_context)
+            with get_langfuse().start_as_current_observation(
+                name="publication-pipeline",
+                as_type="span",
+                input={
+                    "run_id": run_id,
+                    "gewerk_id": gewerk_id,
+                    "precision_works": len(precision_works),
+                    "expanded_works": len(expanded_works),
+                },
+            ):
+                pipeline = PublicationPipeline(on_progress=on_progress)
+                dossier = await pipeline.run(research_result, research_questions, gewerk_context)
 
         dossier_dict = dossier.model_dump()
 
@@ -660,12 +679,25 @@ async def run_publication_pipeline(run_id: str):
 
 
 async def _run_all_stages(run_id: str) -> None:
-    await _run_pipeline_stages(run_id, RESEARCH_STAGES, final_event=False)
-    run_after = await run_store.get_run(run_id)
-    if run_after and run_after["stages"]["expansion"]["status"] == "completed":
-        await _run_full_publication_pipeline(run_id)
-    else:
-        await _push(run_id, "run_completed", {"run_id": run_id})
+    from langfuse import propagate_attributes
+    from config import get_langfuse
+
+    run = await run_store.get_run(run_id)
+    if not run:
+        return
+
+    with propagate_attributes(session_id=run_id, user_id=run["gewerk_id"]):
+        with get_langfuse().start_as_current_observation(
+            name="full-pipeline",
+            as_type="span",
+            input={"run_id": run_id, "gewerk_id": run["gewerk_id"]},
+        ):
+            await _run_pipeline_stages(run_id, RESEARCH_STAGES, final_event=False)
+            run_after = await run_store.get_run(run_id)
+            if run_after and run_after["stages"]["expansion"]["status"] == "completed":
+                await _run_full_publication_pipeline(run_id)
+            else:
+                await _push(run_id, "run_completed", {"run_id": run_id})
 
 
 @app.post("/api/runs/{run_id}/pipeline/full")
