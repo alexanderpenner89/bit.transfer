@@ -1,33 +1,36 @@
-name: Deploy to Raspberry Pi
+name: Deploy to DigitalOcean
 
-# Der Workflow startet jedes Mal, wenn du Code in den 'main' Branch pushst
 on:
   push:
-    branches: [ pi-deployment ]  # Hier den Namen des Branches eintragen
+    branches: [main]
+
 jobs:
   deploy:
-    # Hier wird dein registrierter Runner auf dem Pi ausgewählt
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
-      # 1. Schritt: Den aktuellen Code von GitHub auf den Pi laden
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: 209.38.209.103
+          username: root
+          key: ${{ secrets.DO_SSH_PRIVATE_KEY }}
+          script: |
+            cd /opt/bit-transfer
 
-      # 2. Schritt: .env aus persistentem Pfad einkopieren
-      - name: Restore .env file
-        run: cp /home/alex/.env.bit-transfer .env
+            # Clone or pull latest code
+            if [ ! -d .git ]; then
+              git clone https://github.com/${{ github.repository }} .
+            else
+              git fetch origin main
+              git reset --hard origin/main
+            fi
 
-      # 3. Schritt: Docker Container bauen und starten
-      - name: Build and Restart with Docker Compose
-        run: |
-          # Wir nutzen die spezifische Pi-Konfiguration
-          # -f gibt die Datei an
-          # up -d startet die Container im Hintergrund
-          # --build erzwingt ein Neuerstellen der Images (wichtig für ARM64)
-          docker-compose -f docker-compose.pi.yml up -d --build --remove-orphans
+            # Restore .env from persistent location
+            cp /root/.env.bit-transfer .env
 
-      # 4. Schritt: Aufräumen (Optional)
-      # Löscht alte, nicht mehr verwendete Docker-Images, um Speicherplatz auf dem Pi zu sparen
-      - name: Cleanup old Docker images
-        run: docker image prune -f
+            # Build and deploy
+            docker compose -f docker-compose.prod.yml up -d --build --remove-orphans
+
+            # Cleanup old images
+            docker image prune -f
