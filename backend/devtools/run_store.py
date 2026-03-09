@@ -103,3 +103,21 @@ async def update_stage(run_id: str, stage: str, updates: dict[str, Any]) -> None
             return
         data["runs"][run_id]["stages"][stage].update(updates)
         _save_raw(data)
+
+
+async def cancel_running_stages(run_id: str) -> list[str]:
+    """Mark all 'running' stages as 'cancelled'. Returns list of cancelled stage names."""
+    async with _lock:
+        data = _load_raw()
+        if run_id not in data["runs"]:
+            return []
+        cancelled = []
+        for stage, info in data["runs"][run_id]["stages"].items():
+            if info["status"] == "running":
+                info["status"] = "cancelled"
+                info["completed_at"] = None
+                info["error"] = "Cancelled by user"
+                cancelled.append(stage)
+        if cancelled:
+            _save_raw(data)
+        return cancelled
