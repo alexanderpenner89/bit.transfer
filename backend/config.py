@@ -162,3 +162,13 @@ def get_langfuse():
         host=settings.langfuse_base_url,
         tracing_enabled=bool(settings.langfuse_enabled and settings.langfuse_public_key),
     )
+
+
+def fetch_prompt(name: str, cache_ttl_seconds: int = 300):
+    """Fetch a Langfuse prompt by name. Returns None if unavailable or disabled."""
+    if not (settings.langfuse_enabled and settings.langfuse_public_key):
+        return None
+    try:
+        return get_langfuse().get_prompt(name, cache_ttl_seconds=cache_ttl_seconds)
+    except Exception:
+        return None

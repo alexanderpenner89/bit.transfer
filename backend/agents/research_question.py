@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from pydantic_ai import Agent, RunContext
 
-from config import get_langfuse, settings
+from config import fetch_prompt, get_langfuse, settings
 from schemas.publication_pipeline import GewerksContext, ResearchQuestionsModel
 
 
@@ -31,6 +31,7 @@ class ResearchQuestionAgent:
             deps_type=ResearchQuestionDeps,
             defer_model_check=True,
         )
+        self._langfuse_prompt = fetch_prompt("research-question")
         self._register_prompts()
 
     async def generate(self, context: GewerksContext) -> ResearchQuestionsModel:
@@ -67,6 +68,20 @@ class ResearchQuestionAgent:
 
     def _build_user_prompt(self, context: GewerksContext) -> str:
         kernkompetenzen = ", ".join(context.kernkompetenzen[:6])
+
+        if self._langfuse_prompt:
+            try:
+                msgs = self._langfuse_prompt.compile(
+                    gewerk_name=context.gewerk_name,
+                    gewerk_id=context.gewerk_id,
+                    kernkompetenzen=kernkompetenzen,
+                )
+                user_msg = next((m["content"] for m in msgs if m["role"] == "user"), None)
+                if user_msg:
+                    return user_msg
+            except Exception:
+                pass
+
         return f"""Generiere 3–5 aktuelle, praxisrelevante Forschungsfragen für das folgende Handwerksgewerk.
 
 **Gewerk:** {context.gewerk_name} (ID: {context.gewerk_id})
@@ -89,6 +104,16 @@ Gib außerdem einen kurzen research_focus (Ein-Satz-Zusammenfassung) an."""
     def _register_prompts(self) -> None:
         @self.agent.system_prompt
         def system_prompt() -> str:
+            if self._langfuse_prompt:
+                try:
+                    sys_content = next(
+                        (m["content"] for m in self._langfuse_prompt.prompt if m["role"] == "system"),
+                        None,
+                    )
+                    if sys_content:
+                        return sys_content
+                except Exception:
+                    pass
             return (
                 "Du bist ein Experte für Handwerksberufe und wissenschaftliche Forschung.\n"
                 "Deine Aufgabe ist es, relevante Forschungsfragen für ein Handwerksgewerk zu generieren.\n\n"

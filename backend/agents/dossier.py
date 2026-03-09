@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
-from config import get_langfuse, settings
+from config import fetch_prompt, get_langfuse, settings
 from schemas.publication_pipeline import DossierModel, EnrichedArticle
 
 
@@ -50,6 +50,7 @@ class DossierAgent:
             deps_type=DossierDeps,
             defer_model_check=True,
         )
+        self._langfuse_prompt = fetch_prompt("dossier")
         self._register_prompts()
 
     async def generate(
@@ -103,6 +104,20 @@ class DossierAgent:
                 f"  Key Learnings:\n{learnings}\n"
             )
 
+        if self._langfuse_prompt:
+            try:
+                msgs = self._langfuse_prompt.compile(
+                    gewerk_name=deps.gewerk_name,
+                    research_questions=questions,
+                    article_count=str(len(deps.article_summaries)),
+                    articles=articles_text,
+                )
+                user_msg = next((m["content"] for m in msgs if m["role"] == "user"), None)
+                if user_msg:
+                    return user_msg
+            except Exception:
+                pass
+
         return f"""Erstelle ein Executive Summary und übergreifende Schlüsselerkenntnisse für das folgende Forschungsdossier.
 
 **Gewerk:** {deps.gewerk_name}
@@ -122,6 +137,16 @@ Achte auf Kohärenz und Praxisrelevanz."""
     def _register_prompts(self) -> None:
         @self.agent.system_prompt
         def system_prompt() -> str:
+            if self._langfuse_prompt:
+                try:
+                    sys_content = next(
+                        (m["content"] for m in self._langfuse_prompt.prompt if m["role"] == "system"),
+                        None,
+                    )
+                    if sys_content:
+                        return sys_content
+                except Exception:
+                    pass
             return (
                 "Du bist ein erfahrener Experte für Handwerk und Technologietransfer.\n"
                 "Deine Aufgabe ist es, aus mehreren Fachartikeln ein kohärentes Dossier "

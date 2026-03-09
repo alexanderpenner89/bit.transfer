@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from config import get_langfuse, settings
+from config import fetch_prompt, get_langfuse, settings
 from pydantic_ai import Agent, RunContext
 
 from schemas.gewerksprofil import GewerksProfilModel
@@ -34,6 +34,7 @@ class TopicEvaluatorAgent:
             deps_type=EvaluatorDeps,
             defer_model_check=True,
         )
+        self._langfuse_prompt = fetch_prompt("topic-evaluator")
         self._register_prompts()
 
     async def evaluate(
@@ -86,6 +87,25 @@ class TopicEvaluatorAgent:
         techniken = ", ".join(
             (profil.techniken_manuell + profil.techniken_maschinell)[:6]
         )
+
+        if self._langfuse_prompt:
+            try:
+                msgs = self._langfuse_prompt.compile(
+                    topic_id=candidate.topic_id,
+                    topic_display_name=candidate.display_name,
+                    topic_frequency=str(candidate.frequency),
+                    gewerk_name=profil.gewerk_name,
+                    gewerk_id=profil.gewerk_id,
+                    kernkompetenzen=kernkompetenzen,
+                    werkstoffe=werkstoffe,
+                    techniken=techniken,
+                )
+                user_msg = next((m["content"] for m in msgs if m["role"] == "user"), None)
+                if user_msg:
+                    return user_msg
+            except Exception:
+                pass
+
         return f"""Evaluate whether the following OpenAlex topic is relevant for this craft trade.
 
 **Topic to evaluate:**
@@ -105,6 +125,16 @@ Respond with a TopicEvaluation including your reasoning and confidence (0.0–1.
     def _register_prompts(self) -> None:
         @self.agent.system_prompt
         def system_prompt() -> str:
+            if self._langfuse_prompt:
+                try:
+                    sys_content = next(
+                        (m["content"] for m in self._langfuse_prompt.prompt if m["role"] == "system"),
+                        None,
+                    )
+                    if sys_content:
+                        return sys_content
+                except Exception:
+                    pass
             return (
                 "You are an expert in academic literature and German craft trades (Handwerk).\n"
                 "Your task is to evaluate whether an OpenAlex research topic is relevant for a given trade.\n\n"

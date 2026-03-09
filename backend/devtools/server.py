@@ -227,8 +227,10 @@ async def _execute_stage(stage: str, stage_input: dict[str, Any], on_progress) -
     raise ValueError(f"Unknown stage: {stage}")
 
 
-async def _run_pipeline_stages(run_id: str, stages: list[str]) -> None:
+async def _run_pipeline_stages(run_id: str, stages: list[str], *, final_event: bool = True) -> None:
     """Run a sequence of stages, loading inputs from prior stage outputs."""
+    from langfuse import propagate_attributes
+
     run = await run_store.get_run(run_id)
     if not run:
         return
@@ -239,26 +241,152 @@ async def _run_pipeline_stages(run_id: str, stages: list[str]) -> None:
         if run["stages"][s]["status"] == "completed" and run["stages"][s]["output"]:
             ctx[s] = run["stages"][s]["output"]
 
-    for stage in stages:
-        stage_input = _build_stage_input_from_ctx(stage, run, ctx)
-        if stage_input is None:
-            await _push(run_id, "stage_failed", {
-                "stage": stage,
-                "error": "Cannot build input — missing upstream outputs",
-            })
+    with propagate_attributes(session_id=run_id, user_id=run["gewerk_id"]):
+        for stage in stages:
+            stage_input = _build_stage_input_from_ctx(stage, run, ctx)
+            if stage_input is None:
+                await _push(run_id, "stage_failed", {
+                    "stage": stage,
+                    "error": "Cannot build input — missing upstream outputs",
+                })
+                await run_store.update_stage(run_id, stage, {
+                    "status": "failed",
+                    "completed_at": _now(),
+                    "error": "Missing upstream outputs",
+                })
+                break
+            await _run_stage(run_id, stage, stage_input)
+            # Refresh run and update ctx after stage completes
+            run = await run_store.get_run(run_id)
+            if run["stages"][stage]["status"] != "completed":
+                break
+            if run["stages"][stage]["output"]:
+                ctx[stage] = run["stages"][stage]["output"]
+
+    if final_event:
+        await _push(run_id, "run_completed", {"run_id": run_id})
+
+
+async def _run_full_publication_pipeline(run_id: str) -> None:
+    """Run all publication stages using PublicationPipeline (processes ALL works in parallel)."""
+    from langfuse import propagate_attributes
+
+    run = await run_store.get_run(run_id)
+    if not run:
+        return
+
+    # Build context from completed stages
+    ctx: dict[str, Any] = {}
+    for s in run_store.STAGES:
+        if run["stages"][s]["status"] == "completed" and run["stages"][s]["output"]:
+            ctx[s] = run["stages"][s]["output"]
+
+    gewerk_id = run["gewerk_id"]
+    gewerk_name = run["gewerk_name"]
+    profil = _load_profile_by_gewerk_id(gewerk_id)
+    kernkompetenzen = profil.get("kernkompetenzen", []) if profil else []
+
+    precision_out = ctx.get("precision", [])
+    expansion_out = ctx.get("expansion", [])
+
+    if not precision_out and not expansion_out:
+        error = "No works from research pipeline — run research stages first"
+        for stage in PUBLICATION_STAGES:
             await run_store.update_stage(run_id, stage, {
                 "status": "failed",
                 "completed_at": _now(),
-                "error": "Missing upstream outputs",
+                "error": error,
             })
-            break
-        await _run_stage(run_id, stage, stage_input)
-        # Refresh run and update ctx after stage completes
-        run = await run_store.get_run(run_id)
-        if run["stages"][stage]["status"] != "completed":
-            break
-        if run["stages"][stage]["output"]:
-            ctx[stage] = run["stages"][stage]["output"]
+            await _push(run_id, "stage_failed", {"stage": stage, "error": error})
+        await _push(run_id, "run_completed", {"run_id": run_id})
+        return
+
+    # Mark all publication stages as running
+    for stage in PUBLICATION_STAGES:
+        await run_store.update_stage(run_id, stage, {
+            "status": "running",
+            "started_at": _now(),
+            "output": None,
+            "error": None,
+        })
+        await _push(run_id, "stage_started", {"stage": stage})
+
+    try:
+        from agents.publication_pipeline import PublicationPipeline
+        from schemas.research_pipeline import ResearchResult, WorkResult
+        from schemas.publication_pipeline import GewerksContext, ResearchQuestionsModel
+
+        precision_works = [
+            WorkResult.model_validate(w)
+            for w in (precision_out if isinstance(precision_out, list) else [])
+        ]
+        expanded_works = [
+            WorkResult.model_validate(w)
+            for w in (expansion_out if isinstance(expansion_out, list) else [])
+        ]
+        research_result = ResearchResult(
+            gewerk_id=gewerk_id,
+            exploration_works=[],
+            precision_works=precision_works,
+            expanded_works=expanded_works,
+            relevant_topics=[],
+        )
+        research_questions = ResearchQuestionsModel(
+            gewerk_id=gewerk_id,
+            research_questions=[],
+            research_focus="",
+        )
+        gewerk_context = GewerksContext(
+            gewerk_id=gewerk_id,
+            gewerk_name=gewerk_name,
+            kernkompetenzen=kernkompetenzen,
+        )
+
+        def on_progress(msg: str) -> None:
+            asyncio.get_event_loop().call_soon_threadsafe(
+                lambda: asyncio.create_task(
+                    _push(run_id, "progress", {"stage": "pub_eval", "message": _strip_rich(msg)})
+                )
+            )
+
+        with propagate_attributes(session_id=run_id, user_id=gewerk_id):
+            pipeline = PublicationPipeline(on_progress=on_progress)
+            dossier = await pipeline.run(research_result, research_questions, gewerk_context)
+
+        dossier_dict = dossier.model_dump()
+
+        for stage in PUBLICATION_STAGES:
+            output = dossier_dict if stage == "dossier" else None
+            await run_store.update_stage(run_id, stage, {
+                "status": "completed",
+                "completed_at": _now(),
+                "output": output,
+            })
+            await _push(run_id, "stage_completed", {"stage": stage, "output": output})
+
+        # Publish to Ghost if configured
+        from config import settings as _settings
+        if _settings.ghost_enabled:
+            from ghost.client import GhostAdminClient
+            from ghost.publisher import publish_dossier
+            await _push(run_id, "progress", {"stage": "dossier", "message": f"Publishing {len(dossier.articles)} articles to Ghost..."})
+            async with GhostAdminClient(
+                api_key=_settings.ghost_admin_api_key,
+                ghost_url=_settings.ghost_url,
+            ) as ghost_client:
+                posts = await publish_dossier(dossier, ghost_client, author_id=_settings.ghost_ai_author_id)
+            for post in posts:
+                await _push(run_id, "progress", {"stage": "dossier", "message": f"Published: {post.title} → {post.url}"})
+
+    except Exception as exc:
+        error_msg = f"{type(exc).__name__}: {exc}"
+        for stage in PUBLICATION_STAGES:
+            await run_store.update_stage(run_id, stage, {
+                "status": "failed",
+                "completed_at": _now(),
+                "error": error_msg,
+            })
+            await _push(run_id, "stage_failed", {"stage": stage, "error": error_msg})
 
     await _push(run_id, "run_completed", {"run_id": run_id})
 
@@ -495,7 +623,7 @@ async def run_publication_pipeline(run_id: str, background_tasks: BackgroundTask
     run = await run_store.get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
-    background_tasks.add_task(_run_pipeline_stages, run_id, PUBLICATION_STAGES)
+    background_tasks.add_task(_run_full_publication_pipeline, run_id)
     return {"accepted": True}
 
 
@@ -504,8 +632,16 @@ async def run_full_pipeline(run_id: str, background_tasks: BackgroundTasks):
     run = await run_store.get_run(run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
-    all_stages = RESEARCH_STAGES + PUBLICATION_STAGES
-    background_tasks.add_task(_run_pipeline_stages, run_id, all_stages)
+
+    async def _run_all() -> None:
+        await _run_pipeline_stages(run_id, RESEARCH_STAGES, final_event=False)
+        run_after = await run_store.get_run(run_id)
+        if run_after and run_after["stages"]["expansion"]["status"] == "completed":
+            await _run_full_publication_pipeline(run_id)
+        else:
+            await _push(run_id, "run_completed", {"run_id": run_id})
+
+    background_tasks.add_task(_run_all)
     return {"accepted": True}
 
 

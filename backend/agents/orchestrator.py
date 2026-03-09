@@ -13,6 +13,7 @@ from pathlib import Path
 from pydantic_ai import Agent, RunContext
 from pydantic_ai_skills import SkillsToolset
 
+from config import fetch_prompt
 from schemas.gewerksprofil import GewerksProfilModel
 from schemas.search_strategy import SearchStrategyModel
 
@@ -40,6 +41,7 @@ class OrchestratorAgent:
             deps_type=GewerksProfilModel,
             defer_model_check=True,
         )
+        self._langfuse_prompt = fetch_prompt("orchestrator")
         self._register_system_prompts()
 
     async def generate(self, profil: GewerksProfilModel) -> SearchStrategyModel:
@@ -90,6 +92,23 @@ class OrchestratorAgent:
         werkstoffe = ", ".join(profil.werkstoffe[:6])
         software = ", ".join(profil.software_tools[:4])
 
+        if self._langfuse_prompt:
+            try:
+                msgs = self._langfuse_prompt.compile(
+                    gewerk_name=profil.gewerk_name,
+                    gewerk_id=profil.gewerk_id,
+                    hwo_anlage=str(profil.hwo_anlage),
+                    kernkompetenzen=kernkompetenzen,
+                    techniken=techniken,
+                    werkstoffe=werkstoffe,
+                    software_tools=software,
+                )
+                user_msg = next((m["content"] for m in msgs if m["role"] == "user"), None)
+                if user_msg:
+                    return user_msg
+            except Exception:
+                pass
+
         return f"""Analysiere das folgende Handwerksgewerk und generiere eine präzise OpenAlex-Suchstrategie.
 
 **Gewerk:** {profil.gewerk_name} (ID: {profil.gewerk_id}, HWO-Anlage: {profil.hwo_anlage})
@@ -137,6 +156,16 @@ Antworte NUR mit dem strukturierten SearchStrategyModel-Output."""
 
         @self.agent.system_prompt
         def openalex_expert_prompt() -> str:
+            if self._langfuse_prompt:
+                try:
+                    sys_content = next(
+                        (m["content"] for m in self._langfuse_prompt.prompt if m["role"] == "system"),
+                        None,
+                    )
+                    if sys_content:
+                        return sys_content
+                except Exception:
+                    pass
             return """Du bist ein Principal Data Engineer, spezialisiert auf die OpenAlex API.
 Deine Aufgabe ist es, aus Handwerks-Gewerkebeschreibungen (HWO) hochpräzise Suchstrategien für wissenschaftliche Literatur zu generieren.
 

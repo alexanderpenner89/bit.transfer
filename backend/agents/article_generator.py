@@ -13,7 +13,7 @@ from typing import Any
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
-from config import get_langfuse, settings
+from config import fetch_prompt, get_langfuse, settings
 from schemas.publication_pipeline import EnrichedArticle, WorkSummary
 
 
@@ -63,6 +63,8 @@ class ArticleGeneratorAgent:
             defer_model_check=True,
             retries=2,
         )
+        self._langfuse_prompt = fetch_prompt("article-generator")
+        self._langfuse_validator_prompt = fetch_prompt("article-validator")
         self._register_prompts()
 
     async def generate(self, deps: ArticleDeps) -> EnrichedArticle:
@@ -138,27 +140,50 @@ class ArticleGeneratorAgent:
         kernkompetenzen = ", ".join(context.kernkompetenzen[:6])
         questions = "\n".join(f"  - {q}" for q in deps.research_questions)
 
-        abstract_text = f"\n**Abstract:** {work.abstract}" if work.abstract else ""
-        doi_text = f"\n**DOI:** {work.doi}" if work.doi else ""
+        abstract_text = work.abstract or ""
+        doi_text = work.doi or ""
         doi_link = f'<a href="https://doi.org/{work.doi.replace("https://doi.org/", "")}">{work.doi}</a>' if work.doi else ""
         year_text = f" ({work.publication_year})" if work.publication_year else ""
-        citations_text = f"\n**Zitierungen:** {work.citation_count}"
 
-        perspectives_text = ""
         if deps.perspectives:
             persp_lines = []
             for p in deps.perspectives[:8]:
                 year = f" ({p.publication_year})" if p.publication_year else ""
                 persp_lines.append(f"  • [{p.title}{year}] (work_id: {p.work_id})")
-            perspectives_text = "\n**Verwandte Arbeiten:**\n" + "\n".join(persp_lines)
+            perspectives_text = "\n".join(persp_lines)
         else:
-            perspectives_text = "\n**Verwandte Arbeiten:** Keine"
+            perspectives_text = "Keine"
 
+        if self._langfuse_prompt:
+            try:
+                msgs = self._langfuse_prompt.compile(
+                    work_title=work.title,
+                    work_year=year_text,
+                    work_doi=doi_text,
+                    citation_count=str(work.citation_count),
+                    work_abstract=abstract_text,
+                    perspectives=perspectives_text,
+                    gewerk_name=context.gewerk_name,
+                    kernkompetenzen=kernkompetenzen,
+                    research_questions=questions,
+                    doi_link=doi_link,
+                )
+                user_msg = next((m["content"] for m in msgs if m["role"] == "user"), None)
+                if user_msg:
+                    return user_msg
+            except Exception:
+                pass
+
+        # Fallback: inline template
+        doi_line = f"\n**DOI:** {doi_text}" if doi_text else ""
+        abstract_line = f"\n**Abstract:** {abstract_text}" if abstract_text else ""
+        perspectives_block = f"\n**Verwandte Arbeiten:**\n{perspectives_text}" if deps.perspectives else "\n**Verwandte Arbeiten:** Keine"
         return f"""Erstelle ein HTML-Transfer-Dossier für das folgende Handwerksgewerk.
 
 **Hauptpublikation:**
-- Titel: {work.title}{year_text}{doi_text}{citations_text}{abstract_text}
-{perspectives_text}
+- Titel: {work.title}{year_text}{doi_line}
+**Zitierungen:** {work.citation_count}{abstract_line}
+{perspectives_block}
 
 **Gewerk:** {context.gewerk_name}
 **Kernkompetenzen:** {kernkompetenzen}
@@ -245,6 +270,16 @@ class ArticleGeneratorAgent:
 
         @validator.system_prompt
         def _val_system() -> str:
+            if self._langfuse_validator_prompt:
+                try:
+                    sys_content = next(
+                        (m["content"] for m in self._langfuse_validator_prompt.prompt if m["role"] == "system"),
+                        None,
+                    )
+                    if sys_content:
+                        return sys_content
+                except Exception:
+                    pass
             return (
                 "Du bist ein Qualitätsprüfer für wissenschaftliche Transfer-Dossiers.\n"
                 "Prüfe den HTML-Artikel auf:\n"
@@ -287,6 +322,16 @@ class ArticleGeneratorAgent:
     def _register_prompts(self) -> None:
         @self.agent.system_prompt
         def system_prompt() -> str:
+            if self._langfuse_prompt:
+                try:
+                    sys_content = next(
+                        (m["content"] for m in self._langfuse_prompt.prompt if m["role"] == "system"),
+                        None,
+                    )
+                    if sys_content:
+                        return sys_content
+                except Exception:
+                    pass
             return (
                 "Du bist ein erfahrener Fachjournalist für Handwerk, Bautechnik und Technologietransfer.\n"
                 "Du erstellst HTML-Transfer-Dossiers für Handwerksgewerke auf Basis wissenschaftlicher Publikationen.\n\n"
