@@ -11,6 +11,8 @@ from tools.openalex_tools import (
     openalex_get_related_works,
     _parse_work,
 )
+from tools.openalex_costs import reset_tracker, get_tracker
+from tools.openalex_tools import openalex_fetch_works
 
 
 # ---------------------------------------------------------------------------
@@ -239,3 +241,83 @@ class TestGetRelatedWorks:
     def test_empty_work_ids_returns_empty(self):
         result = asyncio.run(openalex_get_related_works([], mode="cited_by"))
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# TestCostTracking
+# ---------------------------------------------------------------------------
+
+class TestCostTracking:
+    """Verify each tool adds to the OpenAlexCostTracker when one is active."""
+
+    def test_semantic_search_tracks_cost(self):
+        tracker = reset_tracker()
+        with patch("tools.openalex_tools.Works") as MockWorks:
+            mock_chain = MagicMock()
+            mock_chain.get.return_value = [SAMPLE_RAW_WORK]
+            MockWorks.return_value.search.return_value = mock_chain
+            asyncio.run(openalex_semantic_search("thermal bridge"))
+        assert tracker.total_calls == 1
+        assert tracker.total_cost_usd > 0
+        assert "semantic_search" in tracker.breakdown
+
+    def test_precision_search_tracks_cost_per_query(self):
+        tracker = reset_tracker()
+        with patch("tools.openalex_tools.Works") as MockWorks:
+            mock_chain = MagicMock()
+            mock_chain.filter.return_value = mock_chain
+            mock_chain.search_filter.return_value = mock_chain
+            mock_chain.sort.return_value = mock_chain
+            mock_chain.get.return_value = [SAMPLE_RAW_WORK]
+            MockWorks.return_value = mock_chain
+            asyncio.run(openalex_precision_search("T10116", "Test", ["q1", "q2"]))
+        assert tracker.total_calls == 2  # 2 boolean queries = 2 calls
+        assert tracker.total_cost_usd > 0
+        assert "search" in tracker.breakdown
+
+    def test_fetch_works_tracks_cost(self):
+        tracker = reset_tracker()
+        with patch("tools.openalex_tools.Works") as MockWorks:
+            mock_chain = MagicMock()
+            mock_chain.filter.return_value = mock_chain
+            mock_chain.get.return_value = [SAMPLE_RAW_WORK]
+            MockWorks.return_value = mock_chain
+            asyncio.run(openalex_fetch_works(["W123"]))
+        assert tracker.total_calls == 1
+        assert tracker.total_cost_usd > 0
+        assert "list_filter" in tracker.breakdown
+
+    def test_get_related_works_cited_by_tracks_cost_per_work(self):
+        tracker = reset_tracker()
+        with patch("tools.openalex_tools.Works") as MockWorks:
+            mock_chain = MagicMock()
+            mock_chain.filter.return_value = mock_chain
+            mock_chain.get.return_value = [SAMPLE_RAW_WORK]
+            MockWorks.return_value = mock_chain
+            asyncio.run(openalex_get_related_works(["W001", "W002"], mode="cited_by"))
+        assert tracker.total_calls == 2  # 2 work_ids = 2 filter calls
+        assert tracker.total_cost_usd > 0
+        assert "list_filter" in tracker.breakdown
+
+    def test_no_tracker_does_not_crash(self):
+        """Tools must not crash when no tracker is active."""
+        from tools.openalex_costs import _tracker
+        _tracker.set(None)
+        with patch("tools.openalex_tools.Works") as MockWorks:
+            mock_chain = MagicMock()
+            mock_chain.get.return_value = [SAMPLE_RAW_WORK]
+            MockWorks.return_value.search.return_value = mock_chain
+            result = asyncio.run(openalex_semantic_search("thermal bridge"))
+        assert len(result) == 1
+
+    def test_get_related_works_references_tracks_cost(self):
+        tracker = reset_tracker()
+        with patch("tools.openalex_tools.Works") as MockWorks:
+            mock_chain = MagicMock()
+            mock_chain.filter.return_value = mock_chain
+            mock_chain.get.return_value = [SAMPLE_RAW_WORK]
+            MockWorks.return_value = mock_chain
+            asyncio.run(openalex_get_related_works(["W001"], mode="references"))
+        assert tracker.total_calls >= 1
+        assert tracker.total_cost_usd > 0
+        assert "list_filter" in tracker.breakdown
