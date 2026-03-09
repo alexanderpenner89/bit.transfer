@@ -15,6 +15,9 @@ dependencies = [
     "pyalex>=0.21",
     "httpx>=0.28.1",
     "pyjwt>=2.11.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sse-starlette>=2.1.0",
 ]
 
 [dependency-groups]
@@ -26,7 +29,7 @@ dev = [
 gewerk-research = "cli:app"
 
 [tool.setuptools]
-packages = ["agents", "schemas", "tests"]
+packages = ["agents", "schemas", "tests", "devtools"]
 py-modules = ["cli", "config"]
 
 [tool.pytest.ini_options]

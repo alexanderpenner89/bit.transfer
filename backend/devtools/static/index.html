@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>bit.transfer · DevTools</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;1,700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:            #f0ede7;
+  --bg-sidebar:    #e8e4dd;
+  --bg-panel:      #ffffff;
+  --bg-hover:      #ebe7e0;
+  --border:        #ddd9d0;
+  --border-hi:     #c8c4bc;
+  --text:          #111111;
+  --dim:           #666666;
+  --muted:         #aaaaaa;
+  --accent:        #d94e00;
+  --accent-bg:     rgba(217,78,0,0.08);
+  --blue:          #1d6fb8;
+  --blue-bg:       rgba(29,111,184,0.08);
+  --green:         #1a7a3e;
+  --green-bg:      rgba(26,122,62,0.08);
+  --red:           #c0392b;
+  --red-bg:        rgba(192,57,43,0.08);
+  --radius:        4px;
+  --font-sans:     'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-serif:    'Playfair Display', Georgia, serif;
+  --font-mono:     'Fira Code', 'Cascadia Code', monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:100vh;overflow:hidden;font-size:13px;line-height:1.5}
+
+/* ── Header ── */
+.hdr{height:48px;background:var(--text);border-bottom:1px solid var(--text);display:flex;align-items:center;padding:0 20px;gap:12px;flex-shrink:0}
+.hdr-logo{font-family:var(--font-sans);font-size:13px;font-weight:600;color:#fff;letter-spacing:-0.02em}
+.hdr-sep{color:rgba(255,255,255,0.25)}
+.hdr-sub{font-size:11px;color:rgba(255,255,255,0.5);font-weight:400;letter-spacing:0.1em;text-transform:uppercase}
+.hdr-right{margin-left:auto;font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:0.12em;text-transform:uppercase}
+
+/* ── Layout ── */
+.app{display:flex;height:calc(100vh - 48px)}
+
+/* ── Sidebar ── */
+.sidebar{width:264px;flex-shrink:0;background:var(--bg-sidebar);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.sb-top{padding:12px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center}
+.sb-input{flex:1;background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius);padding:5px 9px;color:var(--text);font-family:inherit;font-size:12px;outline:none}
+.sb-input:focus{border-color:var(--text)}
+.sb-input::placeholder{color:var(--muted)}
+.sb-scroll{flex:1;overflow-y:auto}
+.sb-section{padding:12px 12px 6px}
+.sb-label{font-size:9px;text-transform:uppercase;letter-spacing:0.14em;color:var(--muted);font-weight:600;margin-bottom:8px}
+
+/* Run items */
+.run-item{padding:9px 12px;cursor:pointer;display:flex;align-items:flex-start;gap:8px;border-bottom:1px solid var(--border);transition:background 0.1s}
+.run-item:hover{background:var(--bg-hover)}
+.run-item.active{background:var(--bg-panel);border-left:3px solid var(--accent);padding-left:9px}
+.run-item-body{flex:1;min-width:0}
+.run-item-name{font-size:12px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.run-item-date{font-size:10px;color:var(--muted);margin-top:1px}
+.run-item-dots{display:flex;gap:3px;margin-top:5px}
+.rdot{width:5px;height:5px;border-radius:50%}
+.rdot.completed{background:var(--green)}
+.rdot.running{background:var(--blue);animation:pulse 1s infinite}
+.rdot.failed{background:var(--red)}
+.rdot.not_run{background:var(--border-hi)}
+.run-del{font-size:14px;color:var(--muted);padding:2px;cursor:pointer;flex-shrink:0;line-height:1}
+.run-del:hover{color:var(--red)}
+
+/* Fixture items */
+.fix-item{padding:6px 10px;cursor:pointer;font-size:12px;color:var(--dim);display:flex;align-items:center;gap:7px;border-radius:var(--radius);margin:1px 6px;transition:all 0.1s}
+.fix-item:hover{background:var(--bg-panel);color:var(--text)}
+.fix-item.active{background:var(--accent-bg);color:var(--accent)}
+.fix-dot{width:4px;height:4px;border-radius:50%;background:currentColor;flex-shrink:0}
+
+/* ── Main ── */
+.main{flex:1;overflow-y:auto;padding:28px 32px}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:var(--radius);border:1px solid transparent;cursor:pointer;font-family:inherit;font-size:11px;font-weight:500;letter-spacing:0.02em;transition:all 0.12s;white-space:nowrap}
+.btn-accent{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-accent:hover{background:#b83d00}
+.btn-ghost{background:transparent;color:var(--dim);border-color:var(--border-hi)}
+.btn-ghost:hover{background:var(--bg-hover);color:var(--text);border-color:var(--text)}
+.btn-red{background:transparent;color:var(--red);border-color:rgba(192,57,43,0.35)}
+.btn-red:hover{background:var(--red-bg)}
+.btn-blue{background:transparent;color:var(--blue);border-color:rgba(29,111,184,0.35)}
+.btn-blue:hover{background:var(--blue-bg)}
+.btn:disabled{opacity:0.35;pointer-events:none;cursor:not-allowed}
+
+/* Empty state */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;color:var(--muted)}
+.empty-icon{font-size:28px;letter-spacing:4px;opacity:0.4}
+.empty-msg{font-size:12px;letter-spacing:0.05em}
+
+/* Run header */
+.run-hdr{display:flex;align-items:baseline;gap:16px;margin-bottom:24px;padding-bottom:16px;border-bottom:2px solid var(--text)}
+.run-hdr-id{font-family:var(--font-serif);font-size:18px;font-weight:700;letter-spacing:-0.01em}
+.run-hdr-meta{font-size:11px;color:var(--muted);letter-spacing:0.05em}
+.run-hdr-acts{margin-left:auto;display:flex;gap:8px}
+
+/* Pipeline section */
+.pipe-section{margin-bottom:28px}
+.pipe-title{font-size:9px;text-transform:uppercase;letter-spacing:0.14em;color:var(--muted);font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.pipe-title::after{content:'';flex:1;height:2px;background:var(--text)}
+.pipe-stages{display:flex;flex-direction:column;gap:5px}
+
+/* Stage card */
+.sc{background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;transition:border-color 0.2s,box-shadow 0.2s}
+.sc:hover{box-shadow:0 1px 4px rgba(0,0,0,0.07)}
+.sc.running{border-color:rgba(29,111,184,0.5);border-left:3px solid var(--blue)}
+.sc.completed{border-color:rgba(26,122,62,0.4);border-left:3px solid var(--green)}
+.sc.failed{border-color:rgba(192,57,43,0.4);border-left:3px solid var(--red)}
+.sc-head{display:flex;align-items:center;padding:10px 14px;gap:10px}
+.sc-icon{width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.sc-name{font-size:12px;font-weight:600;flex:1;color:var(--text)}
+.sc-sub{font-size:10px;font-weight:400;color:var(--muted);margin-left:6px}
+.sc-badge{font-size:9px;padding:2px 6px;border-radius:2px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase}
+.sc-acts{display:flex;gap:5px;margin-left:auto}
+.sc-body{border-top:1px solid var(--border);padding:10px 14px;background:var(--bg)}
+
+/* Stage output */
+.out-stats{display:flex;flex-wrap:wrap;gap:14px;font-size:11px}
+.out-stat span{color:var(--muted)}
+.out-stat b{color:var(--text);font-weight:600}
+.out-preview{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.6;max-height:48px;overflow:hidden;font-style:italic}
+
+/* Progress log */
+.prog-log{font-size:11px;color:var(--dim);max-height:100px;overflow-y:auto;line-height:1.8;font-family:var(--font-mono)}
+.prog-line::before{content:'›  ';color:var(--accent)}
+.err-txt{font-size:11px;color:var(--red);margin-top:4px}
+
+/* Pipeline actions */
+.pipe-acts{display:flex;gap:8px;margin-top:24px;padding-top:18px;border-top:1px solid var(--border);flex-wrap:wrap}
+
+/* Modal */
+.modal-mask{position:fixed;inset:0;background:rgba(17,17,17,0.5);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;z-index:200}
+.modal{background:var(--bg-panel);border:1px solid var(--border);border-radius:var(--radius);width:700px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(0,0,0,0.18)}
+.modal-hdr{padding:16px 20px;border-bottom:2px solid var(--text);display:flex;align-items:center;gap:10px}
+.modal-title{font-family:var(--font-serif);font-size:15px;font-weight:700;flex:1}
+.modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;padding:2px 6px;border-radius:var(--radius);font-family:inherit;line-height:1}
+.modal-close:hover{color:var(--text);background:var(--bg-hover)}
+.modal-body{flex:1;overflow-y:auto;padding:20px}
+.modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--bg)}
+
+.field-label{font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:var(--muted);margin-bottom:6px;font-weight:600}
+.json-ed{width:100%;min-height:180px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px;color:var(--text);font-family:var(--font-mono);font-size:11px;line-height:1.6;resize:vertical;outline:none}
+.json-ed:focus{border-color:var(--text)}
+.json-err{font-size:11px;color:var(--red);margin-top:4px}
+
+/* Obs picker */
+.obs-section{margin-top:18px}
+.obs-empty{font-size:11px;color:var(--muted);padding:14px;text-align:center;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg)}
+.obs-item{padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:5px;cursor:pointer;display:flex;align-items:center;gap:12px;font-size:11px;transition:all 0.1s;background:var(--bg-panel)}
+.obs-item:hover{background:var(--bg-hover);border-color:var(--border-hi)}
+.obs-item.picked{background:var(--accent-bg);border-color:var(--accent)}
+.obs-gewerk{color:var(--accent);font-weight:600;min-width:130px}
+.obs-name{color:var(--dim);flex:1}
+.obs-time{color:var(--muted)}
+
+/* Spinner */
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--border-hi);border-top-color:var(--blue);border-radius:50%;animation:spin 0.65s linear infinite;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:2px}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <span class="hdr-logo">bit.transfer</span>
+  <span class="hdr-sep">/</span>
+  <span class="hdr-sub">DevTools</span>
+  <span class="hdr-right">pipeline debug console</span>
+</div>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sb-top">
+      <input class="sb-input" id="gewerkInput" placeholder="gewerk_id or select fixture…">
+      <button class="btn btn-accent" id="newRunBtn" onclick="createRun()">+ Run</button>
+    </div>
+    <div class="sb-scroll">
+      <div class="sb-section">
+        <div class="sb-label">Runs</div>
+        <div id="runList"></div>
+      </div>
+      <div class="sb-section">
+        <div class="sb-label">Fixtures</div>
+        <div id="fixList"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main" id="main">
+    <div class="empty">
+      <div class="empty-icon">▶ ○ ○</div>
+      <div class="empty-msg">Select a run or create one from a fixture</div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal -->
+<div class="modal-mask" id="modalMask" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-hdr">
+      <span class="modal-title" id="modalTitle">Run Single Stage</span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field-label">Stage Input (JSON)</div>
+      <textarea class="json-ed" id="jsonEditor" rows="10"></textarea>
+      <div class="json-err" id="jsonErr"></div>
+
+      <div class="obs-section">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div class="field-label" style="margin:0">Load from Langfuse</div>
+          <button class="btn btn-ghost" id="loadObsBtn" onclick="loadObservations()" style="font-size:10px">
+            ↻ Fetch observations
+          </button>
+        </div>
+        <div id="obsList"><div class="obs-empty">Click "Fetch observations" to load past successful runs</div></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <div id="modalStatus" style="font-size:10px;color:var(--dim)"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-accent" id="execBtn" onclick="executeStage()">▶ Execute</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let state = {
+  runs: [],
+  fixtures: [],
+  selectedRunId: null,
+  run: null,
+  es: null,         // EventSource
+  progress: {},     // stage -> [messages]
+  modalStage: null,
+  modalRunId: null,
+  observations: [],
+  selectedObs: null,
+  fixturePicked: null, // { filename, data }
+};
+
+const STAGES = ['strategy','explorer','evaluator','precision','expansion','pub_eval','perspective','article','dossier'];
+const STAGE_LABELS = {
+  strategy:'Strategy', explorer:'Explorer', evaluator:'Evaluator',
+  precision:'Precision', expansion:'Expansion', pub_eval:'Pub Eval',
+  perspective:'Perspective', article:'Article', dossier:'Dossier',
+};
+const STAGE_SUBS = {
+  strategy:'search strategy generation', explorer:'semantic work discovery',
+  evaluator:'topic relevance eval', precision:'boolean precision search',
+  expansion:'citation network expansion', pub_eval:'publication relevance eval',
+  perspective:'reference perspective search', article:'HTML article generation',
+  dossier:'executive dossier synthesis',
+};
+const STAGE_DEPS = {
+  strategy:[], explorer:['strategy'], evaluator:['explorer'],
+  precision:['evaluator'], expansion:['precision'],
+  pub_eval:['expansion'], perspective:['pub_eval'],
+  article:['perspective'], dossier:['article'],
+};
+const STAGE_OBS_NAMES = {
+  strategy:'orchestrator.generate', explorer:'explorer.run',
+  evaluator:'evaluator.evaluate', precision:'precision_search.run',
+  pub_eval:'publication_evaluator.evaluate',
+  perspective:'perspective_search.run',
+  article:'article_generator.generate', dossier:'dossier.generate',
+};
+const RESEARCH_STAGES = ['strategy','explorer','evaluator','precision','expansion'];
+const PUB_STAGES = ['pub_eval','perspective','article','dossier'];
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+async function init() {
+  await Promise.all([loadFixtures(), loadRuns()]);
+}
+
+async function loadFixtures() {
+  try {
+    const r = await api('/api/fixtures');
+    state.fixtures = r.fixtures || [];
+    renderSidebar();
+  } catch(e) { console.error('fixtures:', e); }
+}
+
+async function loadRuns() {
+  try {
+    const r = await api('/api/runs');
+    state.runs = r.runs || [];
+    renderSidebar();
+  } catch(e) { console.error('runs:', e); }
+}
+
+// ── API ──────────────────────────────────────────────────────────────────────
+async function api(path, opts={}) {
+  const r = await fetch(path, {
+    headers: {'Content-Type':'application/json'},
+    ...opts,
+  });
+  if (!r.ok) {
+    const txt = await r.text().catch(() => r.statusText);
+    throw new Error(`${r.status}: ${txt}`);
+  }
+  return r.json();
+}
+
+// ── Create run ───────────────────────────────────────────────────────────────
+async function createRun() {
+  const input = document.getElementById('gewerkInput');
+  let gewerk_id = input.value.trim();
+
+  if (!gewerk_id && state.fixturePicked) {
+    gewerk_id = state.fixturePicked.data?.gewerk_id || '';
+  }
+  if (!gewerk_id) {
+    input.focus();
+    input.style.borderColor = 'var(--red)';
+    setTimeout(() => input.style.borderColor = '', 1200);
+    return;
+  }
+  try {
+    const r = await api('/api/runs', {method:'POST', body: JSON.stringify({gewerk_id})});
+    await loadRuns();
+    selectRun(r.run_id);
+    input.value = '';
+    state.fixturePicked = null;
+    renderSidebar();
+  } catch(e) {
+    alert('Failed to create run: ' + e.message);
+  }
+}
+
+// ── Select run ───────────────────────────────────────────────────────────────
+async function selectRun(runId) {
+  if (state.es) { state.es.close(); state.es = null; }
+  state.selectedRunId = runId;
+  state.progress = {};
+  try {
+    state.run = await api(`/api/runs/${runId}`);
+  } catch(e) {
+    state.run = null;
+  }
+  renderSidebar();
+  renderMain();
+  startSSE(runId);
+}
+
+async function deleteRun(runId, e) {
+  e.stopPropagation();
+  if (!confirm(`Delete run ${runId}?`)) return;
+  await api(`/api/runs/${runId}`, {method:'DELETE'});
+  if (state.selectedRunId === runId) {
+    state.selectedRunId = null;
+    state.run = null;
+    if (state.es) { state.es.close(); state.es = null; }
+    renderMain();
+  }
+  await loadRuns();
+}
+
+// ── SSE ──────────────────────────────────────────────────────────────────────
+function startSSE(runId) {
+  const es = new EventSource(`/api/runs/${runId}/stream`);
+  state.es = es;
+
+  function handle(evt, data) {
+    switch(evt) {
+      case 'stage_started':
+        if (state.run?.stages[data.stage]) {
+          state.run.stages[data.stage].status = 'running';
+        }
+        state.progress[data.stage] = state.progress[data.stage] || [];
+        renderMain();
+        break;
+      case 'progress':
+        state.progress[data.stage] = state.progress[data.stage] || [];
+        state.progress[data.stage].push(data.message);
+        renderProgressLog(data.stage);
+        break;
+      case 'stage_completed':
+        if (state.run?.stages[data.stage]) {
+          state.run.stages[data.stage].status = 'completed';
+          state.run.stages[data.stage].output = data.output;
+        }
+        renderMain();
+        // also reload full run for accurate state
+        api(`/api/runs/${runId}`).then(r => { state.run = r; renderMain(); }).catch(()=>{});
+        break;
+      case 'stage_failed':
+        if (state.run?.stages[data.stage]) {
+          state.run.stages[data.stage].status = 'failed';
+          state.run.stages[data.stage].error = data.error;
+        }
+        renderMain();
+        break;
+      case 'run_completed':
+        api(`/api/runs/${runId}`).then(r => { state.run = r; renderMain(); }).catch(()=>{});
+        break;
+    }
+  }
+
+  const events = ['stage_started','progress','stage_completed','stage_failed','run_completed'];
+  events.forEach(name => {
+    es.addEventListener(name, e => {
+      try { handle(name, JSON.parse(e.data)); } catch(err) { console.error(err); }
+    });
+  });
+  es.onerror = () => {};
+}
+
+function renderProgressLog(stage) {
+  const el = document.getElementById(`prog-${stage}`);
+  if (!el) return;
+  const logs = state.progress[stage] || [];
+  el.innerHTML = logs.map(m => `<div class="prog-line">${esc(m)}</div>`).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Pipeline run ─────────────────────────────────────────────────────────────
+async function runPipeline(type) {
+  const runId = state.selectedRunId;
+  if (!runId) return;
+  try {
+    await api(`/api/runs/${runId}/pipeline/${type}`, {method:'POST'});
+  } catch(e) {
+    alert('Failed: ' + e.message);
+  }
+}
+
+// ── Modal ────────────────────────────────────────────────────────────────────
+function openModal(runId, stage) {
+  state.modalStage = stage;
+  state.modalRunId = runId;
+  state.selectedObs = null;
+  state.observations = [];
+
+  document.getElementById('modalTitle').textContent = `Run Single — ${STAGE_LABELS[stage]}`;
+  document.getElementById('jsonErr').textContent = '';
+  document.getElementById('modalStatus').textContent = '';
+  document.getElementById('obsList').innerHTML =
+    '<div class="obs-empty">Click "Fetch observations" to load past successful runs</div>';
+
+  // Pre-fill JSON from current run context
+  const json = buildDefaultInput(stage);
+  document.getElementById('jsonEditor').value = JSON.stringify(json, null, 2);
+  document.getElementById('modalMask').style.display = 'flex';
+}
+
+function closeModal() {
+  document.getElementById('modalMask').style.display = 'none';
+  state.modalStage = null;
+  state.modalRunId = null;
+}
+
+function buildDefaultInput(stage) {
+  const run = state.run;
+  const ctx = {};
+  if (run) {
+    STAGES.forEach(s => {
+      if (run.stages[s]?.status === 'completed' && run.stages[s]?.output) {
+        ctx[s] = run.stages[s].output;
+      }
+    });
+  }
+
+  switch(stage) {
+    case 'strategy': {
+      const profil = state.fixturePicked?.data || {gewerk_id: run?.gewerk_id || '', gewerk_name: run?.gewerk_name || ''};
+      return {profil};
+    }
+    case 'explorer':
+      return {strategy: ctx.strategy || {gewerk_id:'', semantic_queries_en:[], boolean_queries_de:[], boolean_queries_en:[]}};
+    case 'evaluator': {
+      const candidates = ctx.explorer?.topic_candidates || [];
+      return {
+        candidate: candidates[0] || {topic_id:'', display_name:'', frequency:1},
+        profil: state.fixturePicked?.data || {gewerk_id: run?.gewerk_id||'', gewerk_name: run?.gewerk_name||'', kernkompetenzen:[], techniken_manuell:[], techniken_maschinell:[], techniken_oberflaeche:[], werkstoffe:[], software_tools:[], arbeitsbedingungen:[], hwo_anlage:'A', taetigkeitsfelder:{}},
+      };
+    }
+    case 'precision': {
+      const s = ctx.strategy || {};
+      return {
+        topic: ctx.evaluator || {topic_id:'', display_name:'', is_relevant:true, reasoning:'', confidence:0.8},
+        queries: [...(s.boolean_queries_de||[]), ...(s.boolean_queries_en||[])],
+      };
+    }
+    case 'expansion': {
+      const works = ctx.precision || [];
+      return {work_ids: works.slice(0,10).map(w=>w.work_id)};
+    }
+    case 'pub_eval': {
+      const allWorks = [...(ctx.precision||[]), ...(ctx.expansion||[])];
+      const w = allWorks[0] || {};
+      return {
+        work: {work_id: w.work_id||'', title: w.title||'', abstract: w.abstract||null, publication_year: w.publication_year||null},
+        context: {gewerk_name: run?.gewerk_name||'', kernkompetenzen:[], research_questions:[]},
+      };
+    }
+    case 'perspective': {
+      const ev = ctx.pub_eval || {};
+      return {work_id: ev.work_id||'', title: ev.title||'', referenced_work_ids:[]};
+    }
+    case 'article': {
+      const ev = ctx.pub_eval || {};
+      const persp = ctx.perspective || {};
+      return {
+        work_id: ev.work_id||'',
+        work: {title: ev.title||'', abstract:null, doi:null, publication_year:null, citation_count:0},
+        perspectives: persp.related_works||[],
+        gewerk_context: {gewerk_name: run?.gewerk_name||'', kernkompetenzen:[]},
+        research_questions: [],
+      };
+    }
+    case 'dossier': {
+      const art = ctx.article;
+      return {
+        articles: art ? [art] : [],
+        gewerk_id: run?.gewerk_id||'',
+        gewerk_name: run?.gewerk_name||'',
+        research_questions: [],
+      };
+    }
+    default: return {};
+  }
+}
+
+async function loadObservations() {
+  const stage = state.modalStage;
+  const obsName = STAGE_OBS_NAMES[stage];
+  if (!obsName) {
+    document.getElementById('obsList').innerHTML =
+      `<div class="obs-empty">No Langfuse observations available for this stage</div>`;
+    return;
+  }
+  const btn = document.getElementById('loadObsBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Loading…';
+  try {
+    const r = await api(`/api/langfuse/observations?name=${encodeURIComponent(obsName)}&limit=10`);
+    state.observations = r.observations || [];
+    renderObsList();
+  } catch(e) {
+    document.getElementById('obsList').innerHTML =
+      `<div class="obs-empty" style="color:var(--red)">Error: ${esc(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '↻ Fetch observations';
+  }
+}
+
+function renderObsList() {
+  const el = document.getElementById('obsList');
+  if (!state.observations.length) {
+    el.innerHTML = '<div class="obs-empty">No successful observations found for this stage</div>';
+    return;
+  }
+  el.innerHTML = state.observations.map((o,i) => `
+    <div class="obs-item${state.selectedObs===i?' picked':''}" onclick="pickObs(${i})">
+      <span class="obs-gewerk">${esc(o.gewerk_id||'—')}</span>
+      <span class="obs-name">${esc(o.name||'')}</span>
+      <span class="obs-time">${fmtDate(o.created_at)}</span>
+    </div>
+  `).join('');
+}
+
+function pickObs(i) {
+  state.selectedObs = i;
+  const obs = state.observations[i];
+  if (obs?.input) {
+    document.getElementById('jsonEditor').value = JSON.stringify(obs.input, null, 2);
+    document.getElementById('jsonErr').textContent = '';
+  }
+  renderObsList();
+  document.getElementById('modalStatus').textContent =
+    `Loaded input from observation ${obs.observation_id?.slice(0,8)}…`;
+}
+
+async function executeStage() {
+  const stage = state.modalStage;
+  const runId = state.modalRunId;
+  const raw = document.getElementById('jsonEditor').value;
+  let body;
+  try {
+    body = JSON.parse(raw);
+  } catch(e) {
+    document.getElementById('jsonErr').textContent = 'Invalid JSON: ' + e.message;
+    return;
+  }
+  document.getElementById('jsonErr').textContent = '';
+  const btn = document.getElementById('execBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Sending…';
+  try {
+    await api(`/api/runs/${runId}/stages/${stage}`, {method:'POST', body: JSON.stringify(body)});
+    closeModal();
+    // Refresh run state
+    api(`/api/runs/${runId}`).then(r => { state.run = r; renderMain(); }).catch(()=>{});
+  } catch(e) {
+    document.getElementById('jsonErr').textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '▶ Execute';
+  }
+}
+
+// ── Select fixture ────────────────────────────────────────────────────────────
+async function pickFixture(filename) {
+  if (state.fixturePicked?.filename === filename) {
+    state.fixturePicked = null;
+    document.getElementById('gewerkInput').value = '';
+  } else {
+    try {
+      const data = await api(`/api/fixtures/${encodeURIComponent(filename)}`);
+      state.fixturePicked = {filename, data};
+      document.getElementById('gewerkInput').value = data.gewerk_id || '';
+    } catch(e) {
+      alert('Failed to load fixture: ' + e.message);
+    }
+  }
+  renderSidebar();
+}
+
+// ── Render sidebar ────────────────────────────────────────────────────────────
+function renderSidebar() {
+  const runList = document.getElementById('runList');
+  if (!state.runs.length) {
+    runList.innerHTML = `<div style="padding:8px 12px;font-size:10px;color:var(--muted)">No runs yet</div>`;
+  } else {
+    runList.innerHTML = state.runs.map(r => {
+      const dots = STAGES.map(s =>
+        `<div class="rdot ${r.stages[s]?.status||'not_run'}" title="${s}: ${r.stages[s]?.status}"></div>`
+      ).join('');
+      const active = r.run_id === state.selectedRunId;
+      return `
+        <div class="run-item${active?' active':''}" onclick="selectRun('${r.run_id}')">
+          <div class="run-item-body">
+            <div class="run-item-name">${esc(r.gewerk_name||r.gewerk_id)}</div>
+            <div class="run-item-date">${r.run_id.slice(-8)}</div>
+            <div class="run-item-dots">${dots}</div>
+          </div>
+          <div class="run-del" onclick="deleteRun('${r.run_id}',event)" title="Delete run">✕</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  const fixList = document.getElementById('fixList');
+  fixList.innerHTML = state.fixtures.map(f => {
+    const active = state.fixturePicked?.filename === f;
+    return `
+      <div class="fix-item${active?' active':''}" onclick="pickFixture('${esc(f)}')">
+        <div class="fix-dot"></div>${esc(f)}
+      </div>
+    `;
+  }).join('');
+}
+
+// ── Render main ───────────────────────────────────────────────────────────────
+function renderMain() {
+  const main = document.getElementById('main');
+  if (!state.run) {
+    main.innerHTML = `
+      <div class="empty">
+        <div class="empty-icon">▶ ○ ○</div>
+        <div class="empty-msg">Select a run or create one from a fixture</div>
+      </div>`;
+    return;
+  }
+
+  const run = state.run;
+  const date = fmtDate(run.created_at);
+
+  main.innerHTML = `
+    <div class="run-hdr">
+      <div class="run-hdr-id">${esc(run.run_id)}</div>
+      <div class="run-hdr-meta">${esc(run.gewerk_name||run.gewerk_id)} · ${date}</div>
+      <div class="run-hdr-acts">
+        <button class="btn btn-ghost" onclick="refreshRun()">↻ Refresh</button>
+      </div>
+    </div>
+
+    <div class="pipe-section">
+      <div class="pipe-title">Research Pipeline</div>
+      <div class="pipe-stages" id="pipe-research">
+        ${RESEARCH_STAGES.map(s => renderStageCard(run, s)).join('')}
+      </div>
+    </div>
+
+    <div class="pipe-section">
+      <div class="pipe-title">Publication Pipeline</div>
+      <div class="pipe-stages" id="pipe-pub">
+        ${PUB_STAGES.map(s => renderStageCard(run, s)).join('')}
+      </div>
+    </div>
+
+    <div class="pipe-acts">
+      <button class="btn btn-ghost" onclick="runPipeline('research')">▶ Run Research</button>
+      <button class="btn btn-ghost" onclick="runPipeline('publication')">▶ Run Publication</button>
+      <button class="btn btn-accent" onclick="runPipeline('full')">▶▶ Run Full Pipeline</button>
+    </div>
+  `;
+}
+
+function renderStageCard(run, stage) {
+  const st = run.stages[stage] || {};
+  const status = st.status || 'not_run';
+  const icon = statusIcon(status);
+  const logs = state.progress[stage] || [];
+  const depsOk = STAGE_DEPS[stage].every(d => run.stages[d]?.status === 'completed');
+
+  let bodyHtml = '';
+  if (status === 'running') {
+    const logHtml = logs.map(m => `<div class="prog-line">${esc(m)}</div>`).join('');
+    bodyHtml = `<div class="sc-body"><div class="prog-log" id="prog-${stage}">${logHtml}</div></div>`;
+  } else if (status === 'completed' && st.output) {
+    bodyHtml = `<div class="sc-body">${renderOutput(stage, st.output)}</div>`;
+  } else if (status === 'failed' && st.error) {
+    bodyHtml = `<div class="sc-body"><div class="err-txt">✕ ${esc(st.error)}</div></div>`;
+  }
+
+  const badge = status !== 'not_run' ? `<span class="sc-badge" style="${badgeStyle(status)}">${status}</span>` : '';
+  const runBtn = `<button class="btn btn-ghost" style="font-size:10px" ${!depsOk&&status==='not_run'?'disabled':''} onclick="openModal('${run.run_id}','${stage}')">◎ Run Single</button>`;
+
+  return `
+    <div class="sc ${status}" id="sc-${stage}">
+      <div class="sc-head">
+        <div class="sc-icon">${icon}</div>
+        <div class="sc-name">${STAGE_LABELS[stage]}<span class="sc-sub">${STAGE_SUBS[stage]}</span></div>
+        ${badge}
+        <div class="sc-acts">${runBtn}</div>
+      </div>
+      ${bodyHtml}
+    </div>
+  `;
+}
+
+function renderOutput(stage, output) {
+  if (!output) return '';
+  let stats = [];
+  let preview = '';
+
+  switch(stage) {
+    case 'strategy':
+      stats = [
+        stat('Semantic queries', output.semantic_queries_en?.length||0),
+        stat('Boolean DE', output.boolean_queries_de?.length||0),
+        stat('Boolean EN', output.boolean_queries_en?.length||0),
+      ];
+      if (output.semantic_queries_en?.[0]) preview = output.semantic_queries_en[0];
+      break;
+    case 'explorer':
+      stats = [
+        stat('Works found', output.works?.length||0),
+        stat('Topic candidates', output.topic_candidates?.length||0),
+      ];
+      break;
+    case 'evaluator':
+      stats = [
+        stat('Topic', output.display_name||output.topic_id||'—'),
+        stat('Relevant', output.is_relevant ? '✓ yes' : '✗ no'),
+        stat('Confidence', ((output.confidence||0)*100).toFixed(0)+'%'),
+      ];
+      if (output.reasoning) preview = output.reasoning;
+      break;
+    case 'precision':
+      stats = [stat('Precision works', Array.isArray(output)?output.length:0)];
+      break;
+    case 'expansion':
+      stats = [stat('Expanded works', Array.isArray(output)?output.length:0)];
+      break;
+    case 'pub_eval':
+      stats = [
+        stat('Interesting', output.is_interesting?'✓ yes':'✗ no'),
+        stat('Relevance', ((output.relevance_score||0)*100).toFixed(0)+'%'),
+        stat('Title', (output.title||'').slice(0,40)+'…'),
+      ];
+      break;
+    case 'perspective':
+      stats = [stat('Related works', output.related_works?.length||0)];
+      break;
+    case 'article':
+      const wc = output.html ? Math.round(output.html.replace(/<[^>]+>/g,'').split(/\s+/).length) : 0;
+      stats = [stat('Title', (output.title||'').slice(0,50)), stat('~words', wc)];
+      break;
+    case 'dossier':
+      stats = [
+        stat('Articles', output.articles?.length||0),
+        stat('Key findings', output.key_findings?.length||0),
+      ];
+      if (output.executive_summary) preview = output.executive_summary.slice(0,180)+'…';
+      break;
+    default:
+      stats = [stat('Output', typeof output === 'object' ? 'object' : String(output))];
+  }
+
+  return `
+    <div class="out-stats">${stats.join('')}</div>
+    ${preview ? `<div class="out-preview">${esc(preview)}</div>` : ''}
+  `;
+}
+
+function stat(label, value) {
+  return `<div class="out-stat"><span>${label}: </span><b>${esc(String(value))}</b></div>`;
+}
+
+function statusIcon(s) {
+  switch(s) {
+    case 'completed': return '<span style="color:var(--green);font-size:14px">✓</span>';
+    case 'running':   return '<span class="spin"></span>';
+    case 'failed':    return '<span style="color:var(--red);font-size:14px">✕</span>';
+    default:          return '<span style="color:var(--border-hi);font-size:14px">○</span>';
+  }
+}
+
+function badgeStyle(s) {
+  switch(s) {
+    case 'completed': return 'background:var(--green-bg);color:var(--green);border:1px solid rgba(26,122,62,0.25)';
+    case 'running':   return 'background:var(--blue-bg);color:var(--blue);border:1px solid rgba(29,111,184,0.25)';
+    case 'failed':    return 'background:var(--red-bg);color:var(--red);border:1px solid rgba(192,57,43,0.25)';
+    default:          return 'background:rgba(0,0,0,0.05);color:var(--muted);border:1px solid var(--border)';
+  }
+}
+
+async function refreshRun() {
+  if (!state.selectedRunId) return;
+  try {
+    state.run = await api(`/api/runs/${state.selectedRunId}`);
+    renderMain();
+  } catch(e) {}
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleString('en-GB', {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+// keyboard: Escape closes modal
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

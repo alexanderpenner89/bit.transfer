@@ -41,6 +41,22 @@ x-langfuse-env: &langfuse-env
 
 services:
 
+  # ── DevTools ──────────────────────────────────────────────────────────────────
+
+  devtools:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.devtools
+    ports:
+      - "8080:8000"
+    volumes:
+      - ./backend:/app
+      - devtools_runs:/app/data/dev_runs
+    env_file: .env
+    environment:
+      LANGFUSE_BASE_URL: http://langfuse-web:3000
+    restart: unless-stopped
+
   # ── Ghost CMS ────────────────────────────────────────────────────────────────
 
   ghost:
@@ -225,3 +241,4 @@ volumes:
   langfuse-redis-data:
   langfuse-clickhouse-data:
   langfuse-minio-data:
+  devtools_runs:
