@@ -35,14 +35,17 @@ class ResearchQuestionAgent:
 
     async def generate(self, context: GewerksContext) -> ResearchQuestionsModel:
         """Generate research questions for the given craft trade context."""
+        user_prompt = self._build_user_prompt(context) # bzw. profil
         with get_langfuse().start_as_current_observation(
             name="research_question.generate",
             as_type="generation",
             model=settings.langfuse_model_name(),
-            input={"gewerk_name": context.gewerk_name},
+            input={
+                "gewerk_name": context.gewerk_name,
+                "prompt": user_prompt,
+            },
         ) as obs:
             deps = ResearchQuestionDeps(context=context)
-            user_prompt = self._build_user_prompt(context)
             result = await self.agent.run(user_prompt, deps=deps)
             output = result.output
             usage = result.usage()

@@ -67,6 +67,7 @@ class TopicEvaluatorAgent:
                 output={
                     "is_relevant": output.is_relevant,
                     "confidence": output.confidence,
+                    "reasoning": output.reasoning,
                 },
                 usage_details={
                     "input": usage.input_tokens or 0,
