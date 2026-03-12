@@ -1,4 +1,4 @@
-# Bit-Transfer
+# bit.transfer
 
 [![Deploy](https://img.shields.io/badge/deploy-DigitalOcean-blue)](https://m.do.co/c)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
@@ -8,7 +8,6 @@
 
 Bit-Transfer ist eine modulare Plattform, die KI-Agenten nutzt, um Gewerksprofile zu analysieren, wissenschaftliche Forschung zu automatisieren und Ergebnisse für Content-Management-Systeme aufzubereiten.
 
-![Architektur](docs/assets/architecture.png)
 
 ## Features
 
