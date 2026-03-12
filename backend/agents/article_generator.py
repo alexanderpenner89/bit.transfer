@@ -13,7 +13,7 @@ from typing import Any
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
-from config import fetch_prompt, get_langfuse, settings
+from config import compile_prompt_user_msg, fetch_prompt, get_langfuse, get_prompt_system_msg, settings
 from schemas.publication_pipeline import EnrichedArticle, WorkSummary
 
 
@@ -154,31 +154,10 @@ class ArticleGeneratorAgent:
         else:
             perspectives_text = "Keine"
 
-        if self._langfuse_prompt:
-            try:
-                msgs = self._langfuse_prompt.compile(
-                    work_title=work.title,
-                    work_year=year_text,
-                    work_doi=doi_text,
-                    citation_count=str(work.citation_count),
-                    work_abstract=abstract_text,
-                    perspectives=perspectives_text,
-                    gewerk_name=context.gewerk_name,
-                    kernkompetenzen=kernkompetenzen,
-                    research_questions=questions,
-                    doi_link=doi_link,
-                )
-                user_msg = next((m["content"] for m in msgs if m["role"] == "user"), None)
-                if user_msg:
-                    return user_msg
-            except Exception:
-                pass
-
-        # Fallback: inline template
         doi_line = f"\n**DOI:** {doi_text}" if doi_text else ""
         abstract_line = f"\n**Abstract:** {abstract_text}" if abstract_text else ""
         perspectives_block = f"\n**Verwandte Arbeiten:**\n{perspectives_text}" if deps.perspectives else "\n**Verwandte Arbeiten:** Keine"
-        return f"""Erstelle ein HTML-Transfer-Dossier für das folgende Handwerksgewerk.
+        fallback = f"""Erstelle ein HTML-Transfer-Dossier für das folgende Handwerksgewerk.
 
 **Hauptpublikation:**
 - Titel: {work.title}{year_text}{doi_line}
@@ -244,6 +223,20 @@ class ArticleGeneratorAgent:
 - Bibliographie mit allen zitierten Quellen und DOI-Links wo verfügbar
 - `intro`-Feld: 2–3 Sätze plain text (kein HTML) für Vorschau
 - `key_learnings`: 3–5 prägnante Stichpunkte als plain text Liste"""
+        return compile_prompt_user_msg(
+            self._langfuse_prompt,
+            fallback,
+            work_title=work.title,
+            work_year=year_text,
+            work_doi=doi_text,
+            citation_count=str(work.citation_count),
+            work_abstract=abstract_text,
+            perspectives=perspectives_text,
+            gewerk_name=context.gewerk_name,
+            kernkompetenzen=kernkompetenzen,
+            research_questions=questions,
+            doi_link=doi_link,
+        )
 
     async def _validate(
         self,
@@ -270,24 +263,17 @@ class ArticleGeneratorAgent:
 
         @validator.system_prompt
         def _val_system() -> str:
-            if self._langfuse_validator_prompt:
-                try:
-                    sys_content = next(
-                        (m["content"] for m in self._langfuse_validator_prompt.prompt if m["role"] == "system"),
-                        None,
-                    )
-                    if sys_content:
-                        return sys_content
-                except Exception:
-                    pass
-            return (
-                "Du bist ein Qualitätsprüfer für wissenschaftliche Transfer-Dossiers.\n"
-                "Prüfe den HTML-Artikel auf:\n"
-                "- Sprache: Muss Deutsch sein (außer Fachbegriffe)\n"
-                "- Struktur: auf-einen-blick, findings mit TRL-badge, transfer-potential, conclusion, bibliography\n"
-                "- Inhalt: TRL-Einschätzung muss zur Publikation passen\n"
-                "- Transferrelevanz: Konkrete Handlungsempfehlungen für das Gewerk\n"
-                "Gib nur passed und issues zurück. Generiere KEIN eigenes HTML."
+            return get_prompt_system_msg(
+                self._langfuse_validator_prompt,
+                (
+                    "Du bist ein Qualitätsprüfer für wissenschaftliche Transfer-Dossiers.\n"
+                    "Prüfe den HTML-Artikel auf:\n"
+                    "- Sprache: Muss Deutsch sein (außer Fachbegriffe)\n"
+                    "- Struktur: auf-einen-blick, findings mit TRL-badge, transfer-potential, conclusion, bibliography\n"
+                    "- Inhalt: TRL-Einschätzung muss zur Publikation passen\n"
+                    "- Transferrelevanz: Konkrete Handlungsempfehlungen für das Gewerk\n"
+                    "Gib nur passed und issues zurück. Generiere KEIN eigenes HTML."
+                ),
             )
 
         val_prompt = (
@@ -322,24 +308,17 @@ class ArticleGeneratorAgent:
     def _register_prompts(self) -> None:
         @self.agent.system_prompt
         def system_prompt() -> str:
-            if self._langfuse_prompt:
-                try:
-                    sys_content = next(
-                        (m["content"] for m in self._langfuse_prompt.prompt if m["role"] == "system"),
-                        None,
-                    )
-                    if sys_content:
-                        return sys_content
-                except Exception:
-                    pass
-            return (
-                "Du bist ein erfahrener Fachjournalist für Handwerk, Bautechnik und Technologietransfer.\n"
-                "Du erstellst HTML-Transfer-Dossiers für Handwerksgewerke auf Basis wissenschaftlicher Publikationen.\n\n"
-                "Deine Stärken:\n"
-                "- Wissenschaftliche Erkenntnisse praxisnah aufbereiten\n"
-                "- TRL-Einschätzungen (Technology Readiness Level 1–9) präzise einordnen\n"
-                "- Transferbarrieren benennen und Überwindungsstrategien nennen\n"
-                "- Statistiken und Zahlen mit <mark> hervorheben\n"
-                "- Alle Quellen mit DOI-Links korrekt zitieren\n\n"
-                "Pflicht: Nur Deutsch. Ausgabe IMMER als vollständiges HTML-Dokument gemäß Struktur."
+            return get_prompt_system_msg(
+                self._langfuse_prompt,
+                (
+                    "Du bist ein erfahrener Fachjournalist für Handwerk, Bautechnik und Technologietransfer.\n"
+                    "Du erstellst HTML-Transfer-Dossiers für Handwerksgewerke auf Basis wissenschaftlicher Publikationen.\n\n"
+                    "Deine Stärken:\n"
+                    "- Wissenschaftliche Erkenntnisse praxisnah aufbereiten\n"
+                    "- TRL-Einschätzungen (Technology Readiness Level 1–9) präzise einordnen\n"
+                    "- Transferbarrieren benennen und Überwindungsstrategien nennen\n"
+                    "- Statistiken und Zahlen mit <mark> hervorheben\n"
+                    "- Alle Quellen mit DOI-Links korrekt zitieren\n\n"
+                    "Pflicht: Nur Deutsch. Ausgabe IMMER als vollständiges HTML-Dokument gemäß Struktur."
+                ),
             )

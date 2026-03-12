@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel
 from pydantic_ai import Agent
 
-from config import fetch_prompt, get_langfuse, settings
+from config import compile_prompt_user_msg, fetch_prompt, get_langfuse, get_prompt_system_msg, settings
 from schemas.publication_pipeline import PublicationEvaluation
 
 
@@ -103,24 +103,7 @@ class PublicationEvaluatorAgent:
         kernkompetenzen = ", ".join(context.kernkompetenzen[:6])
         questions = "\n".join(f"  - {q}" for q in context.research_questions)
         year_text = f" ({work.publication_year})" if work.publication_year else ""
-
-        if self._langfuse_prompt:
-            try:
-                msgs = self._langfuse_prompt.compile(
-                    work_title=work.title,
-                    work_year=year_text,
-                    work_abstract=abstract_text,
-                    gewerk_name=context.gewerk_name,
-                    kernkompetenzen=kernkompetenzen,
-                    research_questions=questions,
-                )
-                user_msg = next((m["content"] for m in msgs if m["role"] == "user"), None)
-                if user_msg:
-                    return user_msg
-            except Exception:
-                pass
-
-        return f"""Bewerte, ob die folgende wissenschaftliche Publikation für das Gewerk relevant und interessant ist.
+        fallback = f"""Bewerte, ob die folgende wissenschaftliche Publikation für das Gewerk relevant und interessant ist.
 
 **Publikation:**
 - Titel: {work.title}{year_text}
@@ -139,30 +122,33 @@ class PublicationEvaluatorAgent:
 4. Extrahiere 2–5 Key Insights als Stichworte (key_insights) — nur wenn is_interesting=true
 
 Setze is_interesting=true nur wenn die Publikation direkt anwendbares Wissen für das Gewerk liefert."""
+        return compile_prompt_user_msg(
+            self._langfuse_prompt,
+            fallback,
+            work_title=work.title,
+            work_year=year_text,
+            work_abstract=abstract_text,
+            gewerk_name=context.gewerk_name,
+            kernkompetenzen=kernkompetenzen,
+            research_questions=questions,
+        )
 
     def _register_prompts(self) -> None:
         @self.agent.system_prompt
         def system_prompt() -> str:
-            if self._langfuse_prompt:
-                try:
-                    sys_content = next(
-                        (m["content"] for m in self._langfuse_prompt.prompt if m["role"] == "system"),
-                        None,
-                    )
-                    if sys_content:
-                        return sys_content
-                except Exception:
-                    pass
-            return (
-                "Du bist ein Experte für Handwerksberufe und wissenschaftliche Literaturauswertung.\n"
-                "Deine Aufgabe ist es, wissenschaftliche Publikationen auf ihre Relevanz "
-                "für ein spezifisches Handwerksgewerk zu bewerten.\n\n"
-                "Eine Publikation ist interessant wenn sie:\n"
-                "- Direkt anwendbares Wissen für das Gewerk liefert\n"
-                "- Neue Technologien oder Materialien für das Gewerk beschreibt\n"
-                "- Arbeitssicherheit oder Gesundheitsschutz im Gewerk adressiert\n"
-                "- Praxisrelevante Erkenntnisse enthält\n\n"
-                "Sei präzise: Allgemeine Physik ist NICHT relevant für einen Maurer, "
-                "nur weil Maurerei Physik beinhaltet. Es muss direkten Anwendungsbezug geben.\n\n"
-                "Wenn kein Abstract vorhanden → bewerte konservativ anhand des Titels."
+            return get_prompt_system_msg(
+                self._langfuse_prompt,
+                (
+                    "Du bist ein Experte für Handwerksberufe und wissenschaftliche Literaturauswertung.\n"
+                    "Deine Aufgabe ist es, wissenschaftliche Publikationen auf ihre Relevanz "
+                    "für ein spezifisches Handwerksgewerk zu bewerten.\n\n"
+                    "Eine Publikation ist interessant wenn sie:\n"
+                    "- Direkt anwendbares Wissen für das Gewerk liefert\n"
+                    "- Neue Technologien oder Materialien für das Gewerk beschreibt\n"
+                    "- Arbeitssicherheit oder Gesundheitsschutz im Gewerk adressiert\n"
+                    "- Praxisrelevante Erkenntnisse enthält\n\n"
+                    "Sei präzise: Allgemeine Physik ist NICHT relevant für einen Maurer, "
+                    "nur weil Maurerei Physik beinhaltet. Es muss direkten Anwendungsbezug geben.\n\n"
+                    "Wenn kein Abstract vorhanden → bewerte konservativ anhand des Titels."
+                ),
             )

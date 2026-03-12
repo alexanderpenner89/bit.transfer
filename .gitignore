@@ -210,3 +210,18 @@ __marimo__/
 
 # Git worktrees
 .worktrees/
+
+# Claude Code local settings (contain local paths/username)
+.claude/
+
+# Generated codebase snapshots
+codebase.md
+.aidigestignore
+
+# User profile data (keep only template profiles, not real data)
+data/profiles/*.json
+!data/profiles/.gitkeep
+
+# macOS / Windows
+.DS_Store
+Thumbs.db

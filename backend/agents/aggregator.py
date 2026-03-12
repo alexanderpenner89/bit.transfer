@@ -14,7 +14,7 @@ from typing import Any, TypeVar
 
 _T = TypeVar("_T")
 
-from config import get_langfuse
+from config import get_langfuse, settings
 
 from agents.evaluator import TopicEvaluatorAgent
 from agents.explorer import ExplorerAgent
@@ -24,9 +24,6 @@ from schemas.research_pipeline import ResearchResult, WorkResult
 from schemas.search_strategy import SearchStrategyModel
 from tools.openalex_costs import reset_tracker
 from tools.openalex_tools import openalex_get_related_works
-
-_TOP_N_FOR_EXPANSION = 10
-
 
 class ResearchAggregator:
     """Orchestrates the full 4-stage research pipeline."""
@@ -153,7 +150,7 @@ class ResearchAggregator:
             self._log(f"  [green]✓[/green] {len(precision_works)} Precision Works (dedupliziert, nach Citations sortiert)")
 
             # Stage 4: Citation network expansion on top-N precision works
-            top_ids = [w.work_id for w in precision_works[:_TOP_N_FOR_EXPANSION]]
+            top_ids = [w.work_id for w in precision_works[:settings.expansion_top_n]]
             expanded_works: list[WorkResult] = []
             expansion_failed = False
             if top_ids and not self._skip_expansion:

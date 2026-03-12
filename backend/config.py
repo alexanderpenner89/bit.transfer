@@ -71,6 +71,13 @@ class Settings(BaseSettings):
     llm_concurrency: int = 3  # max parallel LLM calls (Ollama Cloud limit: 3)
     openalex_concurrency: int = 1  # max parallel OpenAlex API requests (free tier: 1 = sequential to avoid 429)
 
+    # DevTools CORS
+    cors_allowed_origins: list[str] = ["*"]
+
+    # Pipeline tuning
+    perspective_max_related: int = 8   # max reference works fetched per publication
+    expansion_top_n: int = 10          # top-N precision works fed into citation expansion
+
     # Langfuse Tracing
     langfuse_secret_key: str | None = None
     langfuse_public_key: str | None = None
@@ -165,6 +172,34 @@ _Agent.instrument_all()
 def get_langfuse() -> _Langfuse:
     """Return the shared Langfuse singleton (same instance used by pydantic-ai)."""
     return langfuse
+
+
+def compile_prompt_user_msg(langfuse_prompt, fallback: str, **kwargs) -> str:
+    """Compile a Langfuse prompt and return its user message, or fall back to `fallback`."""
+    if langfuse_prompt:
+        try:
+            msgs = langfuse_prompt.compile(**kwargs)
+            user_msg = next((m["content"] for m in msgs if m["role"] == "user"), None)
+            if user_msg:
+                return user_msg
+        except Exception:
+            pass
+    return fallback
+
+
+def get_prompt_system_msg(langfuse_prompt, fallback: str) -> str:
+    """Extract the system message from a Langfuse prompt, or fall back to `fallback`."""
+    if langfuse_prompt:
+        try:
+            sys_content = next(
+                (m["content"] for m in langfuse_prompt.prompt if m["role"] == "system"),
+                None,
+            )
+            if sys_content:
+                return sys_content
+        except Exception:
+            pass
+    return fallback
 
 
 def fetch_prompt(name: str, cache_ttl_seconds: int = 300):

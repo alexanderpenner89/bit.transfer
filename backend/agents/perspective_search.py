@@ -9,12 +9,10 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from config import get_langfuse
+from config import get_langfuse, settings
 from schemas.publication_pipeline import PerspectiveResult, WorkSummary
 from schemas.research_pipeline import WorkResult
 from tools.openalex_tools import openalex_fetch_works
-
-_MAX_RELATED = 8
 
 
 class PerspectiveInput(BaseModel):
@@ -46,10 +44,10 @@ class PerspectiveSearchAgent:
             seen: set[str] = {inp.work_id}
             related: list[WorkSummary] = []
 
-            ref_ids = inp.referenced_work_ids[:_MAX_RELATED]
+            ref_ids = inp.referenced_work_ids[:settings.perspective_max_related]
             if ref_ids:
                 try:
-                    ref_works = await openalex_fetch_works(ref_ids, max_results=_MAX_RELATED)
+                    ref_works = await openalex_fetch_works(ref_ids, max_results=settings.perspective_max_related)
                     for w in ref_works:
                         if w.work_id not in seen:
                             seen.add(w.work_id)

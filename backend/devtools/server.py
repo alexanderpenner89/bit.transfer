@@ -33,13 +33,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
+from config import settings as _settings
 from devtools import run_store
 from devtools import langfuse_bridge
 
 app = FastAPI(title="bit.transfer DevTools")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://alexanderpenner.de"],
+    allow_origins=_settings.cors_allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],

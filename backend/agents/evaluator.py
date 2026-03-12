@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from config import fetch_prompt, get_langfuse, settings
+from config import compile_prompt_user_msg, fetch_prompt, get_langfuse, get_prompt_system_msg, settings
 from pydantic_ai import Agent, RunContext
 
 from schemas.gewerksprofil import GewerksProfilModel
@@ -87,26 +87,7 @@ class TopicEvaluatorAgent:
         techniken = ", ".join(
             (profil.techniken_manuell + profil.techniken_maschinell)[:6]
         )
-
-        if self._langfuse_prompt:
-            try:
-                msgs = self._langfuse_prompt.compile(
-                    topic_id=candidate.topic_id,
-                    topic_display_name=candidate.display_name,
-                    topic_frequency=str(candidate.frequency),
-                    gewerk_name=profil.gewerk_name,
-                    gewerk_id=profil.gewerk_id,
-                    kernkompetenzen=kernkompetenzen,
-                    werkstoffe=werkstoffe,
-                    techniken=techniken,
-                )
-                user_msg = next((m["content"] for m in msgs if m["role"] == "user"), None)
-                if user_msg:
-                    return user_msg
-            except Exception:
-                pass
-
-        return f"""Evaluate whether the following OpenAlex topic is relevant for this craft trade.
+        fallback = f"""Evaluate whether the following OpenAlex topic is relevant for this craft trade.
 
 **Topic to evaluate:**
 - ID: {candidate.topic_id}
@@ -121,27 +102,32 @@ class TopicEvaluatorAgent:
 
 Is this topic relevant for finding scientific literature useful to this trade?
 Respond with a TopicEvaluation including your reasoning and confidence (0.0–1.0)."""
+        return compile_prompt_user_msg(
+            self._langfuse_prompt,
+            fallback,
+            topic_id=candidate.topic_id,
+            topic_display_name=candidate.display_name,
+            topic_frequency=str(candidate.frequency),
+            gewerk_name=profil.gewerk_name,
+            gewerk_id=profil.gewerk_id,
+            kernkompetenzen=kernkompetenzen,
+            werkstoffe=werkstoffe,
+            techniken=techniken,
+        )
 
     def _register_prompts(self) -> None:
         @self.agent.system_prompt
         def system_prompt() -> str:
-            if self._langfuse_prompt:
-                try:
-                    sys_content = next(
-                        (m["content"] for m in self._langfuse_prompt.prompt if m["role"] == "system"),
-                        None,
-                    )
-                    if sys_content:
-                        return sys_content
-                except Exception:
-                    pass
-            return (
-                "You are an expert in academic literature and German craft trades (Handwerk).\n"
-                "Your task is to evaluate whether an OpenAlex research topic is relevant for a given trade.\n\n"
-                "A topic is relevant if scientific literature in that area would provide practical value "
-                "for the trade's work — covering materials, techniques, safety, digitalization, or "
-                "regulatory compliance.\n\n"
-                "Be precise: a topic about general physics is NOT relevant for a mason just because "
-                "masonry involves physics. The topic must have direct applied relevance.\n\n"
-                "Set is_relevant=True only if you are reasonably confident the topic yields useful literature."
+            return get_prompt_system_msg(
+                self._langfuse_prompt,
+                (
+                    "You are an expert in academic literature and German craft trades (Handwerk).\n"
+                    "Your task is to evaluate whether an OpenAlex research topic is relevant for a given trade.\n\n"
+                    "A topic is relevant if scientific literature in that area would provide practical value "
+                    "for the trade's work — covering materials, techniques, safety, digitalization, or "
+                    "regulatory compliance.\n\n"
+                    "Be precise: a topic about general physics is NOT relevant for a mason just because "
+                    "masonry involves physics. The topic must have direct applied relevance.\n\n"
+                    "Set is_relevant=True only if you are reasonably confident the topic yields useful literature."
+                ),
             )
