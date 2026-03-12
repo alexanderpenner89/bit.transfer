@@ -300,4 +300,4 @@ uv run ruff check .                 # Linting
 
 ## Lizenz
 
-Private — Alle Rechte vorbehalten.
+MIT License
