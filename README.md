@@ -30,7 +30,7 @@ uv sync
 
 # Umgebungsvariablen konfigurieren
 cp .env.example .env
-# ANTHROPIC_API_KEY in .env eintragen
+# Provider und API-Key in .env konfigurieren (Standard: Ollama, kein Key nötig)
 
 # Demo-Pipeline starten
 uv run python cli.py fixtures/electrician-profile.json
@@ -134,24 +134,17 @@ docker compose logs -f mysql
 1. **Ghost Setup aufrufen**: `http://localhost:2368/ghost`
 2. **Admin-Konto erstellen**: Folge dem Setup-Assistenten
 3. **Theme aktivieren**:
-   ```bash
-   # Theme in Ghost aktivieren (via Admin-UI)
-   # Settings → Design → Change theme → Upload theme
-   # Oder: theme/bit-transfer/ als ZIP packen und hochladen
-   ```
+   - Ghost Admin → Settings → Design → Change theme → Upload theme
+   - ZIP der gewünschten Theme-Version unter Releases herunterladen und hochladen
 
-### Theme-Entwicklung
+### Themes
 
-```bash
-# Theme-Verzeichnis
-cd theme/bit-transfer
+Die Ghost-Themes sind in eigenen Repositories gepflegt. Bei jedem Push auf `main` wird automatisch eine neue ZIP als Release-Asset erstellt.
 
-# Abhängigkeiten installieren (falls package.json vorhanden)
-npm install
-
-# Theme-Dateien editieren (Live-Reload in Ghost)
-# Dateien unter theme/bit-transfer/ werden automatisch synchronisiert
-```
+| Theme | Repository | Beschreibung |
+|-------|-----------|--------------|
+| **bit.craft** | [alexanderpenner89/bit.craft](https://github.com/alexanderpenner89/bit.craft) | Strukturiert, inhaltsdicht, gewerkenah |
+| **bit.clarity** | [alexanderpenner89/bit.clarity](https://github.com/alexanderpenner89/bit.clarity) | Apple-inspiriertes Editorial-Design |
 
 ### Routing-Konfiguration
 
@@ -233,13 +226,28 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ### Umgebungsvariablen
 
+Die vollständige Konfiguration erfolgt über `backend/.env` (aus `.env.example` kopieren).
+
+### LLM-Provider
+
+Über `PROVIDER` wird der aktive Anbieter gewählt. Nur der Key des gewählten Providers ist erforderlich.
+
+| `PROVIDER`-Wert | API-Key Variable | Beschreibung |
+|-----------------|------------------|--------------|
+| `ollama` *(Standard)* | — (keiner) | Lokales Ollama, kein Key nötig |
+| `anthropic` | `ANTHROPIC_API_KEY` | Claude (Anthropic) |
+| `openai` | `OPENAI_API_KEY` | GPT-4o (OpenAI) |
+| `gemini` | `GOOGLE_API_KEY` | Gemini (Google) |
+| `openrouter` | `OPENROUTER_API_KEY` | OpenRouter (Multi-Provider-Proxy) |
+
+### Weitere Variablen
+
 | Variable | Beschreibung | Erforderlich |
 |----------|--------------|--------------|
-| `ANTHROPIC_API_KEY` | Claude API Zugriff | ✅ |
+| `MYSQL_ROOT_PASSWORD` | Datenbank-Passwort | ✅ (Prod) |
 | `LANGFUSE_PUBLIC_KEY` | Tracing: Public Key | ❌ |
 | `LANGFUSE_SECRET_KEY` | Tracing: Secret Key | ❌ |
 | `LANGFUSE_BASE_URL` | Tracing: Host URL | ❌ |
-| `MYSQL_ROOT_PASSWORD` | Datenbank-Passwort | ✅ (Prod) |
 
 ## Projektstruktur
 
@@ -251,11 +259,12 @@ bit-transfer/
 │   ├── schemas/         # Pydantic Models
 │   ├── tools/           # OpenAlex Integration
 │   └── tests/           # Pytest Suite
-├── theme/bit-transfer/   # Ghost CMS Theme
 ├── ghost/               # CMS Konfiguration
 ├── nginx/               # Reverse Proxy Config
 └── .github/workflows/    # CI/CD
 ```
+
+> Ghost-Themes: [bit.craft](https://github.com/alexanderpenner89/bit.craft) · [bit.clarity](https://github.com/alexanderpenner89/bit.clarity)
 
 ## API Endpoints
 

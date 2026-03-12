@@ -1,4 +1,9 @@
 routes:
+  /dossiers/:
+    controller: channel
+    filter: tag:-hash-newsletter
+    template: dossiers
+    limit: 12
 
 collections:
   /:
