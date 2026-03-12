@@ -2,7 +2,7 @@
 
 [![Deploy](https://img.shields.io/badge/deploy-DigitalOcean-blue)](https://m.do.co/c)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://python.org)
-[![License](https://img.shields.io/badge/license-Private-lightgrey)]()
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 > Automatisierte KI-Forschung für Handwerksgewerke — von der Profilanalyse bis zur Publikation.
 
@@ -300,4 +300,4 @@ uv run ruff check .                 # Linting
 
 ## Lizenz
 
-MIT License
+MIT — siehe [LICENSE](LICENSE).
