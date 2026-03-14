@@ -50,7 +50,12 @@ class TopicEvaluatorAgent:
             input={
                 "topic_id": candidate.topic_id,
                 "topic_name": candidate.display_name,
-                "gewerk": profil.gewerk_name,
+                "topic_frequency": candidate.frequency,
+                "gewerk_id": profil.gewerk_id,
+                "gewerk_name": profil.gewerk_name,
+                "kernkompetenzen": profil.kernkompetenzen[:6],
+                "werkstoffe": profil.werkstoffe[:5],
+                "techniken": (profil.techniken_manuell + profil.techniken_maschinell)[:6],
             },
         ) as agent:
             deps = EvaluatorDeps(candidate=candidate, profil=profil)
@@ -75,6 +80,7 @@ class TopicEvaluatorAgent:
                     "output": usage.output_tokens or 0,
                 },
                 level=level,
+                **({"prompt": self._langfuse_prompt} if self._langfuse_prompt else {}),
                 **({"status_message": status_message} if status_message else {}),
             )
             return output

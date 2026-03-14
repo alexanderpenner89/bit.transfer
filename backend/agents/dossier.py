@@ -66,8 +66,11 @@ class DossierAgent:
             as_type="generation",
             model=settings.langfuse_model_name(),
             input={
+                "gewerk_id": deps.gewerk_id,
                 "gewerk_name": deps.gewerk_name,
+                "research_questions": deps.research_questions,
                 "article_count": article_count,
+                "articles": [s.title for s in deps.article_summaries],
             },
         ) as obs:
             user_prompt = self._build_user_prompt(deps)
@@ -82,6 +85,7 @@ class DossierAgent:
                     "output": usage.output_tokens or 0,
                 },
                 level="DEFAULT",
+                **({"prompt": self._langfuse_prompt} if self._langfuse_prompt else {}),
             )
             return DossierModel(
                 gewerk_id=deps.gewerk_id,

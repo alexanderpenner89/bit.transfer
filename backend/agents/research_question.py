@@ -42,8 +42,9 @@ class ResearchQuestionAgent:
             as_type="generation",
             model=settings.langfuse_model_name(),
             input={
+                "gewerk_id": context.gewerk_id,
                 "gewerk_name": context.gewerk_name,
-                "prompt": user_prompt,
+                "kernkompetenzen": context.kernkompetenzen[:6] if context.kernkompetenzen else [],
             },
         ) as obs:
             deps = ResearchQuestionDeps(context=context)
@@ -58,6 +59,7 @@ class ResearchQuestionAgent:
                     "output": usage.output_tokens or 0,
                 },
                 level="DEFAULT",
+                **({"prompt": self._langfuse_prompt} if self._langfuse_prompt else {}),
             )
             # Ensure gewerk_id is set correctly
             return ResearchQuestionsModel(

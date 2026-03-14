@@ -66,7 +66,11 @@ class PublicationEvaluatorAgent:
             input={
                 "work_id": work.work_id,
                 "title": work.title,
+                "abstract": work.abstract,
+                "publication_year": work.publication_year,
                 "gewerk_name": context.gewerk_name,
+                "kernkompetenzen": context.kernkompetenzen[:6],
+                "research_questions": context.research_questions,
             },
         ) as obs:
             deps = EvalDeps(work=work, context=context)
@@ -87,6 +91,7 @@ class PublicationEvaluatorAgent:
                     "output": usage.output_tokens or 0,
                 },
                 level="DEFAULT",
+                **({"prompt": self._langfuse_prompt} if self._langfuse_prompt else {}),
             )
             # Ensure work_id and title are set correctly
             return PublicationEvaluation(

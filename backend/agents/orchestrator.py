@@ -51,7 +51,14 @@ class OrchestratorAgent:
             name="orchestrator.generate",
             as_type="generation",
             model=settings.langfuse_model_name(),
-            input={"gewerk_id": profil.gewerk_id, "gewerk_name": profil.gewerk_name},
+            input={
+                "gewerk_id": profil.gewerk_id,
+                "gewerk_name": profil.gewerk_name,
+                "kernkompetenzen": profil.kernkompetenzen[:6],
+                "werkstoffe": profil.werkstoffe[:5],
+                "techniken": (profil.techniken_manuell + profil.techniken_maschinell)[:6],
+                "taetigkeitsfelder": list(profil.taetigkeitsfelder.keys()),
+            },
         ) as span:
             try:
                 user_prompt = self._build_user_prompt(profil)
@@ -72,6 +79,7 @@ class OrchestratorAgent:
                         "output": usage.output_tokens or 0,
                     },
                     level="DEFAULT",
+                    **({"prompt": self._langfuse_prompt} if self._langfuse_prompt else {}),
                 )
 
                 # Ensure gewerk_id matches the input profile

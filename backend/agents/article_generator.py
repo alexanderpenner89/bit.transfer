@@ -77,7 +77,13 @@ class ArticleGeneratorAgent:
             input={
                 "work_id": deps.work_id,
                 "title": deps.work.title,
+                "abstract": deps.work.abstract,
+                "publication_year": deps.work.publication_year,
+                "citation_count": deps.work.citation_count,
+                "doi": deps.work.doi,
                 "gewerk_name": deps.gewerk_context.gewerk_name,
+                "kernkompetenzen": deps.gewerk_context.kernkompetenzen[:6],
+                "research_questions": deps.research_questions,
                 "perspective_count": perspective_count,
                 "perspectives": [
                     {"work_id": p.work_id, "title": p.title}
@@ -125,6 +131,7 @@ class ArticleGeneratorAgent:
                     "output": usage.output_tokens or 0,
                 },
                 level="DEFAULT",
+                **({"prompt": self._langfuse_prompt} if self._langfuse_prompt else {}),
             )
             return EnrichedArticle(
                 work_id=deps.work_id,
@@ -298,6 +305,7 @@ class ArticleGeneratorAgent:
                         "issues": [f"[{i.severity}] {i.description}" for i in val_output.issues],
                     },
                     level="DEFAULT" if val_output.passed else "WARNING",
+                    **({"prompt": self._langfuse_validator_prompt} if self._langfuse_validator_prompt else {}),
                 )
                 return val_output
             except Exception:

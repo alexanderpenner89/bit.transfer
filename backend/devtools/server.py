@@ -118,6 +118,55 @@ def _now() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
+def _fill_default_profil(payload: dict[str, Any]) -> dict[str, Any]:
+    """Ensure required GewerksProfil fields exist so validation won't fail for partial payloads."""
+    base = {
+        "gewerk_id": payload.get("gewerk_id") or "",
+        "gewerk_name": payload.get("gewerk_name") or "",
+        "hwo_anlage": payload.get("hwo_anlage") or "A",
+        "kernkompetenzen": payload.get("kernkompetenzen") or ["Kernkompetenz"],
+        "techniken_manuell": payload.get("techniken_manuell") or ["Technik manuell"],
+        "techniken_maschinell": payload.get("techniken_maschinell") or ["Technik maschinell"],
+        "techniken_oberflaeche": payload.get("techniken_oberflaeche") or ["Oberfläche"],
+        "werkstoffe": payload.get("werkstoffe") or ["Werkstoff"],
+        "software_tools": payload.get("software_tools") or ["Tool"],
+        "arbeitsbedingungen": payload.get("arbeitsbedingungen") or ["Arbeitsbedingung"],
+        "taetigkeitsfelder": payload.get("taetigkeitsfelder") or {"Bereich": ["Tätigkeit"]},
+    }
+    return base
+
+
+def _fill_default_strategy(payload: dict[str, Any]) -> dict[str, Any]:
+    """Ensure strategy payload meets minimal lengths for validation."""
+    base = {
+        "gewerk_id": payload.get("gewerk_id") or "",
+        "semantic_queries_en": payload.get("semantic_queries_en") or [
+            "load-bearing masonry wall construction",
+            "electrical wiring safety practices",
+            "circuit diagram inspection methods",
+        ],
+        "boolean_queries_de": payload.get("boolean_queries_de") or [
+            '("Mauerwerk" OR "Ziegel") AND Tragfähigkeit',
+            '("Elektroinstallation" OR Verkabelung) AND Sicherheit',
+        ],
+        "boolean_queries_en": payload.get("boolean_queries_en") or [
+            '("masonry" OR brickwork) AND structural',
+            '("electrical wiring" OR cabling) AND safety',
+        ],
+    }
+
+    # Pad lists to meet min length requirements
+    def _pad(lst: list[str], min_len: int, filler: str) -> list[str]:
+        if len(lst) >= min_len:
+            return lst
+        return lst + [filler] * (min_len - len(lst))
+
+    base["semantic_queries_en"] = _pad(base["semantic_queries_en"], 3, "electrical systems analysis")
+    base["boolean_queries_de"] = _pad(base["boolean_queries_de"], 2, '("Technik" OR Verfahren) AND Qualität')
+    base["boolean_queries_en"] = _pad(base["boolean_queries_en"], 2, '("technique" OR method) AND quality')
+    return base
+
+
 # ── Stage runner ─────────────────────────────────────────────────────────────
 
 async def _run_stage(run_id: str, stage: str, stage_input: dict[str, Any]) -> None:
@@ -136,7 +185,7 @@ async def _run_stage(run_id: str, stage: str, stage_input: dict[str, Any]) -> No
         )
 
     try:
-        output = await _execute_stage(stage, stage_input, on_progress)
+        output = await _execute_stage(stage, stage_input, on_progress, run_id=run_id)
         await run_store.update_stage(run_id, stage, {
             "status": "completed",
             "completed_at": _now(),
@@ -153,14 +202,24 @@ async def _run_stage(run_id: str, stage: str, stage_input: dict[str, Any]) -> No
         await _push(run_id, "stage_failed", {"stage": stage, "error": error_msg})
 
 
-async def _execute_stage(stage: str, stage_input: dict[str, Any], on_progress) -> Any:
+async def _execute_stage(stage: str, stage_input: dict[str, Any], on_progress, run_id: str | None = None) -> Any:
     """Dispatch to the correct agent and return serializable output."""
     from config import settings
 
     if stage == "strategy":
         from agents.orchestrator import OrchestratorAgent
         from schemas.gewerksprofil import GewerksProfilModel
-        profil = GewerksProfilModel.model_validate(stage_input["profil"])
+        profil_payload = stage_input.get("profil")
+        if profil_payload is None:
+            raise HTTPException(status_code=422, detail="Missing required key 'profil' in request body")
+        # Prefer real fixture data over placeholder values from the UI default
+        if run_id:
+            run = await run_store.get_run(run_id)
+            if run:
+                real_profil = _load_profile_by_gewerk_id(run["gewerk_id"])
+                if real_profil:
+                    profil_payload = real_profil
+        profil = GewerksProfilModel.model_validate(_fill_default_profil(profil_payload))
         agent = OrchestratorAgent()
         strategy = await agent.generate(profil)
         return strategy.model_dump()
@@ -168,7 +227,8 @@ async def _execute_stage(stage: str, stage_input: dict[str, Any], on_progress) -
     elif stage == "explorer":
         from agents.explorer import ExplorerAgent
         from schemas.search_strategy import SearchStrategyModel
-        strategy = SearchStrategyModel.model_validate(stage_input["strategy"])
+        strategy_payload = _fill_default_strategy(stage_input.get("strategy", {}))
+        strategy = SearchStrategyModel.model_validate(strategy_payload)
         agent = ExplorerAgent()
         result = await agent.run(strategy)
         return result.model_dump()
@@ -178,7 +238,15 @@ async def _execute_stage(stage: str, stage_input: dict[str, Any], on_progress) -
         from schemas.research_pipeline import TopicCandidate
         from schemas.gewerksprofil import GewerksProfilModel
         candidates = [TopicCandidate.model_validate(c) for c in stage_input["candidates"]]
-        profil = GewerksProfilModel.model_validate(stage_input["profil"])
+        profil_data = stage_input.get("profil") or {}
+        # Prefer real fixture data over placeholder values from the UI default
+        if run_id:
+            run = await run_store.get_run(run_id)
+            if run:
+                real_profil = _load_profile_by_gewerk_id(run["gewerk_id"])
+                if real_profil:
+                    profil_data = real_profil
+        profil = GewerksProfilModel.model_validate(_fill_default_profil(profil_data))
         agent = TopicEvaluatorAgent()
         sem = asyncio.Semaphore(settings.llm_concurrency)
 
@@ -217,7 +285,15 @@ async def _execute_stage(stage: str, stage_input: dict[str, Any], on_progress) -
     elif stage == "pub_eval":
         from agents.publication_evaluator import PublicationEvaluatorAgent, WorkEvalInput, EvalContext
         work = WorkEvalInput.model_validate(stage_input["work"])
-        context = EvalContext.model_validate(stage_input["context"])
+        context_data = dict(stage_input["context"])
+        # Auto-fill kernkompetenzen from profile when called individually (not via pipeline)
+        if not context_data.get("kernkompetenzen") and run_id:
+            run = await run_store.get_run(run_id)
+            if run:
+                profil = _load_profile_by_gewerk_id(run["gewerk_id"])
+                if profil:
+                    context_data["kernkompetenzen"] = profil.get("kernkompetenzen", [])
+        context = EvalContext.model_validate(context_data)
         agent = PublicationEvaluatorAgent()
         result = await agent.evaluate(work=work, context=context)
         return result.model_dump()

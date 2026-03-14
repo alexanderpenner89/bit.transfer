@@ -44,7 +44,7 @@ class PrecisionSearchAgent:
                     output={
                         "works_found": len(works),
                         "top_works": [
-                            {"work_id": w.work_id, "title": w.title, "citations": w.citation_count}
+                            {"work_id": w.work_id, "title": w.title, "abstract": w.abstract, "citations": w.citation_count}
                             for w in works[:5]
                         ],
                     },

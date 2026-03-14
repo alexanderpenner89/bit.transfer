@@ -149,6 +149,9 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:
 .modal-body{flex:1;overflow-y:auto;padding:20px}
 .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--bg)}
 
+.prefill-row{display:flex;gap:12px;align-items:flex-end;margin-bottom:12px;flex-wrap:wrap}
+.prefill-acts{display:flex;gap:8px;align-items:center}
+
 .field-label{font-size:9px;text-transform:uppercase;letter-spacing:0.12em;color:var(--muted);margin-bottom:6px;font-weight:600}
 .json-ed{width:100%;min-height:180px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:12px;color:var(--text);font-family:var(--font-mono);font-size:11px;line-height:1.6;resize:vertical;outline:none}
 .json-ed:focus{border-color:var(--text)}
@@ -220,6 +223,17 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:
       <button class="modal-close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-body">
+      <div class="prefill-row">
+        <div style="flex:1;min-width:0">
+          <div class="field-label" style="margin-bottom:4px">Input-Quelle</div>
+          <select id="sourceSelect" class="sb-input" style="width:100%;padding:6px 9px" onchange="switchSource(this.value)"></select>
+        </div>
+        <div class="prefill-acts">
+          <button class="btn btn-ghost" onclick="applySource()">⟳ Quelle übernehmen</button>
+          <button class="btn btn-blue" onclick="applySource(true)" title="Nur notwendige Felder und leere Werte entfernen">↘ Minimal</button>
+        </div>
+      </div>
+
       <div class="field-label">Stage Input (JSON)</div>
       <textarea class="json-ed" id="jsonEditor" rows="10"></textarea>
       <div class="json-err" id="jsonErr"></div>
@@ -247,17 +261,13 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);height:
 <script>
 // ── State ────────────────────────────────────────────────────────────────────
 let state = {
+  es: null,
   runs: [],
   fixtures: [],
   selectedRunId: null,
   run: null,
-  es: null,         // EventSource
-  progress: {},     // stage -> [messages]
-  modalStage: null,
-  modalRunId: null,
-  observations: [],
-  selectedObs: null,
   fixturePicked: null, // { filename, data }
+  selectedSource: 'current',
 };
 
 const STAGES = ['strategy','explorer','evaluator','precision','expansion','pub_eval','perspective','article','dossier'];
@@ -342,7 +352,6 @@ async function createRun() {
     await loadRuns();
     selectRun(r.run_id);
     input.value = '';
-    state.fixturePicked = null;
     renderSidebar();
   } catch(e) {
     alert('Failed to create run: ' + e.message);
@@ -359,9 +368,36 @@ async function selectRun(runId) {
   } catch(e) {
     state.run = null;
   }
+  await tryLoadFixtureForRun(state.run);
   renderSidebar();
   renderMain();
-  startSSE(runId);
+  if (isRunning(state.run)) startSSE(runId);
+}
+
+async function tryLoadFixtureForRun(run) {
+  if (!run?.gewerk_id) return;
+  if (state.fixturePicked?.data?.gewerk_id === run.gewerk_id) return; // already loaded
+  // Try exact filename match first (A_13_TISCHLER.json → A_13_TISCHLER)
+  let match = state.fixtures.find(f => f.replace(/\.json$/i, '').toLowerCase() === run.gewerk_id.toLowerCase());
+  if (!match) {
+    // Fallback: scan all fixtures and check gewerk_id field
+    for (const f of state.fixtures) {
+      try {
+        const data = await api(`/api/fixtures/${encodeURIComponent(f)}`);
+        if (data.gewerk_id === run.gewerk_id) {
+          state.fixturePicked = {filename: f, data};
+          return;
+        }
+      } catch(e) {}
+    }
+    return;
+  }
+  try {
+    const data = await api(`/api/fixtures/${encodeURIComponent(match)}`);
+    if (data.gewerk_id === run.gewerk_id) {
+      state.fixturePicked = {filename: match, data};
+    }
+  } catch(e) {}
 }
 
 async function deleteRun(runId, e) {
@@ -449,6 +485,7 @@ async function runPipeline(type) {
   if (!runId) return;
   try {
     await api(`/api/runs/${runId}/pipeline/${type}`, {method:'POST'});
+    if (!state.es) startSSE(runId);
   } catch(e) {
     alert('Failed: ' + e.message);
   }
@@ -470,6 +507,7 @@ function openModal(runId, stage) {
   state.modalRunId = runId;
   state.selectedObs = null;
   state.observations = [];
+  state.selectedSource = 'current';
 
   document.getElementById('modalTitle').textContent = `Run Single — ${STAGE_LABELS[stage]}`;
   document.getElementById('jsonErr').textContent = '';
@@ -477,9 +515,8 @@ function openModal(runId, stage) {
   document.getElementById('obsList').innerHTML =
     '<div class="obs-empty">Click "Fetch observations" to load past successful runs</div>';
 
-  // Pre-fill JSON from current run context
-  const json = buildDefaultInput(stage);
-  document.getElementById('jsonEditor').value = JSON.stringify(json, null, 2);
+  populateSources(stage);
+  applySource();
   document.getElementById('modalMask').style.display = 'flex';
 }
 
@@ -489,8 +526,98 @@ function closeModal() {
   state.modalRunId = null;
 }
 
-function buildDefaultInput(stage) {
-  const run = state.run;
+function defaultProfil(run) {
+  const gewerk_id = run?.gewerk_id || '';
+  const gewerk_name = run?.gewerk_name || '';
+  return {
+    gewerk_id,
+    gewerk_name,
+    hwo_anlage: 'A',
+    kernkompetenzen: ['Kernkompetenz ergänzen'],
+    techniken_manuell: ['Technik manuell'],
+    techniken_maschinell: ['Technik maschinell'],
+    techniken_oberflaeche: ['Oberfläche'],
+    werkstoffe: ['Werkstoff'],
+    software_tools: ['Tool'],
+    arbeitsbedingungen: ['Arbeitsbedingung'],
+    taetigkeitsfelder: {'Bereich': ['Tätigkeit']},
+  };
+}
+
+function defaultStrategy(run) {
+  const gewerk_id = run?.gewerk_id || '';
+  return {
+    gewerk_id,
+    semantic_queries_en: [
+      'electrical installation safety practices',
+      'wiring building systems design best practices',
+      'fault diagnosis electrical systems methods',
+    ],
+    boolean_queries_de: [
+      '("Elektroinstallation" OR Verkabelung) AND Sicherheit',
+      '("Schaltplan" OR "Stromlaufplan") AND Prüfung',
+    ],
+    boolean_queries_en: [
+      '("electrical wiring" OR cabling) AND safety',
+      '("circuit diagram" OR schematic) AND inspection',
+    ],
+  };
+}
+
+function populateSources(stage) {
+  const sel = document.getElementById('sourceSelect');
+  const options = [];
+  const current = state.run;
+  options.push({id:'current', label:'Aktueller Run (Kontext)', payload:buildDefaultInput(stage, current)});
+
+  if (state.fixturePicked?.data && (stage === 'strategy' || stage === 'evaluator' || stage === 'article' || stage === 'dossier' || stage === 'pub_eval')) {
+    options.push({id:'fixture', label:`Fixture: ${state.fixturePicked.filename}`, payload:buildDefaultInput(stage, current, state.fixturePicked.data)});
+  }
+
+  const pastRuns = (state.runs || []).filter(r => r.run_id !== state.selectedRunId);
+  pastRuns.forEach((r, idx) => {
+    options.push({id:`run-${idx}`, label:`Vergangener Run ${r.run_id.slice(-8)} (${r.gewerk_name||r.gewerk_id||'—'})`, payload:buildDefaultInput(stage, r)});
+  });
+
+  sel.innerHTML = options.map(o => `<option value="${esc(o.id)}">${esc(o.label)}</option>`).join('');
+  sel.dataset.payloads = JSON.stringify(options.reduce((m,o)=>{m[o.id]=o.payload;return m;},{}));
+}
+
+function switchSource(id) {
+  state.selectedSource = id;
+}
+
+function applySource(minimal=false) {
+  const sel = document.getElementById('sourceSelect');
+  const payloads = JSON.parse(sel.dataset.payloads||'{}');
+  const payload = payloads[state.selectedSource] || buildDefaultInput(state.modalStage, state.run);
+  const body = minimal ? stripEmpty(deepCopy(payload)) : payload;
+  document.getElementById('jsonEditor').value = JSON.stringify(body, null, 2);
+  document.getElementById('jsonErr').textContent = '';
+}
+
+function deepCopy(v) { return JSON.parse(JSON.stringify(v)); }
+
+function stripEmpty(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(stripEmpty).filter(v => v !== undefined && v !== null && (typeof v !== 'object' || (Array.isArray(v) ? v.length : Object.keys(v).length)));
+  }
+  if (obj && typeof obj === 'object') {
+    const out = {};
+    Object.entries(obj).forEach(([k,v]) => {
+      const sv = stripEmpty(v);
+      const isEmptyObj = sv && typeof sv === 'object' && !Array.isArray(sv) && !Object.keys(sv).length;
+      if (sv === undefined || sv === null) return;
+      if (Array.isArray(sv) && !sv.length) return;
+      if (isEmptyObj) return;
+      out[k] = sv;
+    });
+    return out;
+  }
+  return obj;
+}
+
+function buildDefaultInput(stage, run, profilOverride=null) {
   const ctx = {};
   if (run) {
     STAGES.forEach(s => {
@@ -502,22 +629,22 @@ function buildDefaultInput(stage) {
 
   switch(stage) {
     case 'strategy': {
-      const profil = state.fixturePicked?.data || {gewerk_id: run?.gewerk_id || '', gewerk_name: run?.gewerk_name || ''};
+      const profil = profilOverride || state.fixturePicked?.data || defaultProfil(run);
       return {profil};
     }
     case 'explorer':
-      return {strategy: ctx.strategy || {gewerk_id:'', semantic_queries_en:[], boolean_queries_de:[], boolean_queries_en:[]}};
+      return {strategy: ctx.strategy || defaultStrategy(run)};
     case 'evaluator': {
-      const candidates = ctx.explorer?.topic_candidates || [];
+      const candidates = ctx.explorer?.topic_candidates || ctx.strategy?.topic_candidates || [];
       return {
-        candidate: candidates[0] || {topic_id:'', display_name:'', frequency:1},
-        profil: state.fixturePicked?.data || {gewerk_id: run?.gewerk_id||'', gewerk_name: run?.gewerk_name||'', kernkompetenzen:[], techniken_manuell:[], techniken_maschinell:[], techniken_oberflaeche:[], werkstoffe:[], software_tools:[], arbeitsbedingungen:[], hwo_anlage:'A', taetigkeitsfelder:{}},
+        candidates: candidates.length ? candidates : [{topic_id:'', display_name:'', frequency:1}],
+        profil: profilOverride || state.fixturePicked?.data || defaultProfil(run),
       };
     }
     case 'precision': {
       const s = ctx.strategy || {};
       return {
-        topic: ctx.evaluator || {topic_id:'', display_name:'', is_relevant:true, reasoning:'', confidence:0.8},
+        topics: Array.isArray(ctx.evaluator) ? ctx.evaluator : ctx.evaluator ? [ctx.evaluator] : [{topic_id:'', display_name:'', is_relevant:true, reasoning:'', confidence:0.8}],
         queries: [...(s.boolean_queries_de||[]), ...(s.boolean_queries_en||[])],
       };
     }
@@ -530,7 +657,7 @@ function buildDefaultInput(stage) {
       const w = allWorks[0] || {};
       return {
         work: {work_id: w.work_id||'', title: w.title||'', abstract: w.abstract||null, publication_year: w.publication_year||null},
-        context: {gewerk_name: run?.gewerk_name||'', kernkompetenzen:[], research_questions:[]},
+        context: {gewerk_name: profilOverride?.gewerk_name || run?.gewerk_name||'', kernkompetenzen: profilOverride?.kernkompetenzen||[], research_questions:[]},
       };
     }
     case 'perspective': {
@@ -544,7 +671,7 @@ function buildDefaultInput(stage) {
         work_id: ev.work_id||'',
         work: {title: ev.title||'', abstract:null, doi:null, publication_year:null, citation_count:0},
         perspectives: persp.related_works||[],
-        gewerk_context: {gewerk_name: run?.gewerk_name||'', kernkompetenzen:[]},
+        gewerk_context: {gewerk_name: profilOverride?.gewerk_name || run?.gewerk_name||'', kernkompetenzen: profilOverride?.kernkompetenzen||[]},
         research_questions: [],
       };
     }
@@ -552,8 +679,8 @@ function buildDefaultInput(stage) {
       const art = ctx.article;
       return {
         articles: art ? [art] : [],
-        gewerk_id: run?.gewerk_id||'',
-        gewerk_name: run?.gewerk_name||'',
+        gewerk_id: profilOverride?.gewerk_id || run?.gewerk_id||'',
+        gewerk_name: profilOverride?.gewerk_name || run?.gewerk_name||'',
         research_questions: [],
       };
     }
@@ -630,6 +757,7 @@ async function executeStage() {
   try {
     await api(`/api/runs/${runId}/stages/${stage}`, {method:'POST', body: JSON.stringify(body)});
     closeModal();
+    if (!state.es) startSSE(runId);
     // Refresh run state
     api(`/api/runs/${runId}`).then(r => { state.run = r; renderMain(); }).catch(()=>{});
   } catch(e) {
@@ -889,6 +1017,9 @@ function fmtDate(iso) {
 
 // keyboard: Escape closes modal
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
+
+// Close SSE cleanly on page unload to prevent "connection interrupted" browser warnings
+window.addEventListener('beforeunload', () => { if (state.es) { state.es.close(); state.es = null; } });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 init();
